@@ -4,7 +4,8 @@ TF2Ls for Unity (or TF2 Libraries/Loaders for Unity) is a collection of editor t
 This set of tools is a collection of existing scripts from past community developers packed together and given a very friendly user interface. Things that required too many mouse clicks, minutes, and headaches can now be done in seconds!
 
 # What's Included
-* TF2 Shaders for the Built-in Render Pipeline that support Painting and translucency 
+TF2 Shaders for the Built-in Render Pipeline that support Painting and translucency 
+![](https://github.com/jackyyang09/TF2Ls-for-Unity/blob/Media/Media/Shader%20Paint%20Demo.png)
 * A mesh skeleton switcher that allows for the easy parenting of item/cosmetic/weapon rigs to character skeletal meshes
 
 https://user-images.githubusercontent.com/11392541/146690276-ef22c113-dfd8-42a0-9387-38e2b1108ac6.mp4
