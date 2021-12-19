@@ -18,7 +18,7 @@ MonoBehaviour:
     Jam 2020/Assets
   exportPath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
     Jam 2020/Assets/Imported Assets/TF2 Tools for Unity/HLExtract in Unity/Exports
-  itemToExtract: root\materials\ambulance
+  itemToExtract: 
   vtfLibPath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
     Jam 2020/Assets/Imported Assets/TF2 Tools for Unity/VTFCmd.exe
   vtfInput: 
