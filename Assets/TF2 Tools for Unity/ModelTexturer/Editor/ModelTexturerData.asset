@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbe8f79f0f3d9284382ad1adb6062bf9, type: 3}
+  m_Name: ModelTexturerData
+  m_EditorClassIdentifier: 
+  hlExtractPath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
+    Jam 2020/Assets/Imported Assets/TF2 Tools for Unity/HLExtract.exe
+  packagePath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
+    Jam 2020/Assets
+  exportPath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
+    Jam 2020/Assets/Imported Assets/TF2 Tools for Unity/HLExtract in Unity/Exports
+  itemToExtract: root\materials\ambulance
+  vtfLibPath: C:/Users/jacky/Documents/Unity Projects/Game Jams/Red Shadow Maggots/TF2
+    Jam 2020/Assets/Imported Assets/TF2 Tools for Unity/VTFCmd.exe
+  vtfInput: 
+  vtfFolderInput: 
+  textureOutput: Assets/Imported Assets/TF2 Tools for Unity/VTFLib/Export
+  textureInputFolderPath: 
+  textureOutputFolderPath: Assets/TF2 Tools for Unity/Export
+  generatedMaterialSavePath: Assets/TF2 Tools for Unity/Export
+  showHelpText: 1
+  helpTextSize: 12
+  unlockSystemObjects: 0
+  hlExtractExe: {fileID: 102900000, guid: beb73b284577c164380e364d55bc4ad9, type: 3}
+  vtfCmdExe: {fileID: 102900000, guid: c53a278a02d604e428be2503bcf98e4a, type: 3}
+  referenceMaterial: {fileID: 2100000, guid: a256b3a6fd702114cb311dae116651bd, type: 2}
+  nonPaintedShader: {fileID: 4800000, guid: c4c06634a2d2e3b4b8366c9ecd893767, type: 3}
+  paintedShader: {fileID: 4800000, guid: fedb27530c376a44dbf21f383db41aab, type: 3}
+  normalMapTags:
+  - _normal
+  specularMapTags:
+  - _exp
+  - _exponent

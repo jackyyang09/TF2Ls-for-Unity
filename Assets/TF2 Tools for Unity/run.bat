@@ -1,0 +1,1 @@
+"C:\Users\jacky\Documents\Unity Projects\Game Jams\Red Shadow Maggots\TF2 Jam 2020\Assets\TF2 Tools for Unity\VTFCmd.exe" -folder "C:\Users\jacky\Documents\Unity Projects\Game Jams\Red Shadow Maggots\TF2 Jam 2020\Assets\Materials\Player\sniper\*.vtf"
