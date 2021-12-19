@@ -6,7 +6,10 @@ This set of tools is a collection of existing scripts from past community develo
 # What's Included
 * TF2 Shaders that support Painting and translucency
 * A mesh skeleton switcher that allows for the easy parenting of item/cosmetic/weapon rigs to character skeletal meshes
-* A model texturing tool that automatically reads .VMT files, generates new material assets, converts associated .VTFs into .TGAs and finally applies them to a mesh. All in one press!
+
+https://user-images.githubusercontent.com/11392541/146690276-ef22c113-dfd8-42a0-9387-38e2b1108ac6.mp4
+
+A model texturing tool that automatically reads .VMT files, generates new material assets, converts associated .VTFs into .TGAs and finally applies them to a mesh. All in one press!
 
 # Credits
 * VTF import functionality is done in the backend using VTFLib [Neil "Jed" Jedrzejewski](https://developer.valvesoftware.com/wiki/User:Wunderboy) and [Ryan "Nemesis" Gregg](https://developer.valvesoftware.com/wiki/User:Nem) under the GPL and LGPL licenses.
