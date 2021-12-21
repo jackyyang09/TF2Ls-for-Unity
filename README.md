@@ -19,6 +19,9 @@ A model texturing tool that automatically reads .VMT files, generates new materi
 
 https://user-images.githubusercontent.com/11392541/146690276-ef22c113-dfd8-42a0-9387-38e2b1108ac6.mp4
 
+# Coming Soon
+* A helper component that facilitates use of texture-based eye movement. Gizmos/handlers to control where irises are looking included
+
 # Credits
 * VTF import functionality is done in the backend using VTFLib [Neil "Jed" Jedrzejewski](https://developer.valvesoftware.com/wiki/User:Wunderboy) and [Ryan "Nemesis" Gregg](https://developer.valvesoftware.com/wiki/User:Nem) under the GPL and LGPL licenses.
 * VMT parsing is done using scripts from [Frassle's Ibasa](https://github.com/Frassle/Ibasa) library under the MIT license.
