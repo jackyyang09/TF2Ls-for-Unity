@@ -21,7 +21,10 @@ https://user-images.githubusercontent.com/11392541/146690276-ef22c113-dfd8-42a0-
 
 # Coming Soon
 * A helper component that facilitates use of texture-based eye movement. Gizmos/handlers to control where irises are looking included
-* Automatic .vpk ripping for specific assets by reading the local item schema
+* Automatic .vpk ripping for specific assets by reading vmts
+* Integration of local item schema
+* Native import of VMTs as Unity materials via a ScripttedImporter
+* Change default TF2 shader to your own shader based on the Valve shader being loaded
 
 # Credits
 * VTF import functionality is done in the backend using VTFLib [Neil "Jed" Jedrzejewski](https://developer.valvesoftware.com/wiki/User:Wunderboy) and [Ryan "Nemesis" Gregg](https://developer.valvesoftware.com/wiki/User:Nem) under the GPL and LGPL licenses.
