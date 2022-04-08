@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69c050a6b732f7b4a86982170ce2a895, type: 3}
+  m_Name: Default Overrides
+  m_EditorClassIdentifier: 
+  defaultMaterial: {fileID: 2100000, guid: a256b3a6fd702114cb311dae116651bd, type: 2}
+  shaderOverrides:
+  - tag: VertexLitGeneric
+    shader: {fileID: 4800000, guid: c4c06634a2d2e3b4b8366c9ecd893767, type: 3}
+  propertyOverrides:
+  - tag: $basetexture
+    shaderProperty: _MainTex
+    propertyType: 2
+  - tag: $iris
+    shaderProperty: _MainTex
+    propertyType: 2
+  - tag: $bumpmap
+    shaderProperty: _BumpMap
+    propertyType: 2
+  - tag: $normalmap
+    shaderProperty: _BumpMap
+    propertyType: 2
+  - tag: $phongexponenttexture
+    shaderProperty: _SpecularTex
+    propertyType: 2
+  - tag: $colortint_base
+    shaderProperty: _Paint
+    propertyType: 1
+  - tag: $alphatestreference
+    shaderProperty: _Cutoff
+    propertyType: 0
+  - tag: $blendtintcoloroverbase
+    shaderProperty: _BlendTintColorOverBase
+    propertyType: 0
