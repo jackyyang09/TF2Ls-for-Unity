@@ -16,6 +16,10 @@ namespace TFTools
         public CharacterClass characterClass;
         public Team team;
 
+        [Tooltip("If true, will try to find all VMTs and VTFs for the model by searching through your " +
+            "TF2 game install. Uncheck this option if you already have the VMTs/VMTs in the proper folders.")]
+        public bool searchTF2Install = true;
+
         public string vmtPath;
         public string vtfPath;
         public string textureOutputFolderPath;

@@ -161,12 +161,14 @@ namespace TFTools
         SerializedProperty characterClass;
         SerializedProperty team;
 
-        SerializedProperty overrideAsset;
+        SerializedProperty searchTF2Install;
 
         SerializedProperty vmtPath;
         SerializedProperty vtfPath;
         SerializedProperty textureOutputFolderPath;
         SerializedProperty generatedMaterialSavePath;
+
+        SerializedProperty overrideAsset;
 
         SerializedProperty showHelpText;
 
@@ -178,6 +180,8 @@ namespace TFTools
 
             overrideAsset = FindProp(nameof(overrideAsset));
             FindOverrideAssetProperties();
+
+            searchTF2Install = FindProp(nameof(searchTF2Install));
 
             vmtPath = FindProp(nameof(vmtPath));
             vtfPath = FindProp(nameof(vtfPath));
@@ -302,6 +306,8 @@ namespace TFTools
                 return;
             }
 
+            EditorGUILayout.PropertyField(searchTF2Install);
+
             if (showHelpText.boolValue) EditorGUILayout.LabelField("Choose folders for your model's " +
                 "materials and textures to go. You are recommended to make dedicated folders for " +
                 "characters/weapons/cosmetics and to share folders for maps.", TF2LsSettings.Settings.HelpTextStyle);
@@ -325,7 +331,12 @@ namespace TFTools
             {
                 if (GUILayout.Button("Apply Textures to Model"))
                 {
-                    ExtractVMTsFromMeshes();
+                    if (searchTF2Install.boolValue) ExtractVMTsFromMeshes();
+                    else
+                    {
+                        LoadVMTs();
+                        ConvertVTFsToTextures();
+                    }
                 }
             }
         }
@@ -334,7 +345,9 @@ namespace TFTools
         {
             string vmtFolder = Path.Combine(new string[] { "root", "materials" });
 
-            var renderers = localObject.GetComponentsInChildren<Renderer>();
+            if (localObject) allRenderers.AddRange(localObject.GetComponentsInChildren<Renderer>());
+            if (localRenderer) allRenderers.Add(localRenderer);
+
             List<string> materialPaths = new List<string>();
             vmtsToImport = new List<string>();
 
@@ -349,6 +362,15 @@ namespace TFTools
                     processMaterialPath = (sharedMat) =>
                     {
                         string name = sharedMat.name + ".vmt";
+                        Team teamEnum = (Team)team.enumValueIndex;
+                        if (sharedMat.name.Contains("_red"))
+                        {
+                            if (teamEnum == Team.BLU)
+                            {
+                                name = name.Replace("_red", "_blue");
+                            }
+                        }
+
                         if (!vmtsToImport.Contains(name))
                         {
                             vmtsToImport.Add(name);
@@ -380,7 +402,7 @@ namespace TFTools
                             string defaultPath = Path.Combine(vmtFolder, "weapons", "c_items");
                             defaultPath = Path.Combine(defaultPath, name);
                             materialPaths.Add(defaultPath);
-                            if (teamEnum == Team.BLU) materialPaths.Add(Path.Combine(vmtFolder, Path.Combine(defaultPath, bluName))); ;
+                            if (teamEnum == Team.BLU) materialPaths.Add(Path.Combine(vmtFolder, Path.Combine(defaultPath, bluName)));
 
                             string workshopPath = Path.Combine(vmtFolder, "workshop", "weapons", "c_models");
                             workshopPath = Path.Combine(workshopPath, sharedMat.name);
@@ -408,9 +430,9 @@ namespace TFTools
 
                             string[] splits = name.Split('_');
 
-                            for (int i = 0; i < Mathf.Pow(2, underScores.Length); i++)
+                            for (int c = 0; c < Mathf.Pow(2, underScores.Length); c++)
                             {
-                                string binary = System.Convert.ToString(i, 2);
+                                string binary = System.Convert.ToString(c, 2);
                                 binary = new string('0', underScores.Length - binary.Length) + binary;
 
                                 var charB = binary.ToCharArray();
@@ -437,7 +459,7 @@ namespace TFTools
                     break;
             }
 
-            foreach (var r in renderers)
+            foreach (var r in allRenderers)
             {
                 foreach (var sharedMat in r.sharedMaterials)
                 {
@@ -531,7 +553,9 @@ namespace TFTools
         static Dictionary<string, VMTPropOverrides.PropertyOverride> propertyOverrideLookup;
         static Dictionary<string, Shader> shaderOverrideLookup;
 
-        void ExtractVTFsFromVMTs()
+        List<string> vtfPaths = new List<string>();
+
+        void LoadVMTs()
         {
             if (!Directory.Exists(vtfPath.stringValue))
             {
@@ -562,10 +586,10 @@ namespace TFTools
                 }
             }
 
+            vtfPaths = new List<string>();
             string tifp = Path.Combine(CurrentDirectory, vmtPath.stringValue);
             var files = Directory.GetFiles(tifp, "*.vmt");
             List<Vmt> vmts = new List<Vmt>();
-            List<string> vtfPaths = new List<string>();
 
             for (int i = 0; i < files.Length; i++)
             {
@@ -625,6 +649,11 @@ namespace TFTools
                 }
                 valveAssetTables.Add(name, vat);
             }
+        }
+
+        void ExtractVTFsFromVMTs()
+        {
+            LoadVMTs();
 
             string hlExtractPath = TF2LsSettings.Settings.HLExtractPath;
             string packagePath = Path.Combine(TF2LsSettings.Settings.TFInstallPath, VTF_VPK_FILENAME);
@@ -714,9 +743,6 @@ namespace TFTools
                     texturesToIgnore, "Continue", "Cancel")) return;
             }
 
-            allRenderers = new List<Renderer>();
-            if (localObject != null) allRenderers.AddRange(localObject.GetComponentsInChildren<Renderer>());
-            if (localRenderer != null) allRenderers.Add(localRenderer);
             materialsToGenerate = new List<string>();
             existingMaterials = EditorHelper.ImportAssetsAtPath<Material>(generatedMaterialSavePath.stringValue);
             skipExistingMaterials = false;
@@ -725,6 +751,12 @@ namespace TFTools
                 for (int j = 0; j < allRenderers[i].sharedMaterials.Length; j++)
                 {
                     var matName = allRenderers[i].sharedMaterials[j].name;
+
+                    if ((ModelTexturerData.ModelType)modelType.enumValueIndex != ModelTexturerData.ModelType.Map)
+                    {
+                        if ((Team)team.enumValueIndex == Team.BLU) matName = matName.Replace("_red", "_blue");
+                    }
+
                     if (!materialsToGenerate.Contains(matName)) materialsToGenerate.Add(matName);
                 }
             }
@@ -797,6 +829,9 @@ namespace TFTools
         {
             // Dictionary of texture names to themselves
             Dictionary<string, Texture> textures = new Dictionary<string, Texture>();
+
+            newTextures = EditorHelper.ImportAssetsAtPath<Texture2D>(textureOutputFolderPath.stringValue);
+
             for (int i = 0; i < newTextures.Count; i++)
             {
                 textures.Add(newTextures[i].name, newTextures[i]);
@@ -856,9 +891,10 @@ namespace TFTools
                     // Find the VMT name that best matches the material name
                     for (int j = 0; j < valveKeys.Length; j++)
                     {
-                        if (matName.Contains(valveKeys[j]))
+                        string n = valveKeys[j];
+                        if (matName.Contains(n))
                         {
-                            if (matchingName.Length < valveKeys[j].Length) matchingName = valveKeys[j];
+                            if (matchingName.Length < n.Length) matchingName = n;
                         }
                     }
 
@@ -880,6 +916,7 @@ namespace TFTools
                     if (mat == null) continue;
 
                     string matName = mat.name;
+
                     if ((ModelTexturerData.ModelType)modelType.enumValueIndex != ModelTexturerData.ModelType.Map)
                     {
                         if ((Team)team.enumValueIndex == Team.BLU) matName = matName.Replace("_red", "_blue");
@@ -910,7 +947,6 @@ namespace TFTools
                         failedMaterials.Add(matName);
                         continue;
                     }
-
                     string vmtName = materialToVMT[matName];
 
                     Material newMat = null;

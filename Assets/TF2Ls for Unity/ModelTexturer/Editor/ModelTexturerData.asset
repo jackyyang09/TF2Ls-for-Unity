@@ -13,11 +13,12 @@ MonoBehaviour:
   m_Name: ModelTexturerData
   m_EditorClassIdentifier: 
   modelType: 0
-  characterClass: 6
-  team: 0
-  vmtPath: 
-  vtfPath: 
-  textureOutputFolderPath: 
+  characterClass: 7
+  team: 1
+  searchTF2Install: 1
+  vmtPath: Assets/Test Assets/One Folder
+  vtfPath: Assets/Test Assets/One Folder
+  textureOutputFolderPath: Assets/Test Assets/One Folder
   generatedMaterialSavePath: Assets/Test Assets/One Folder
   overrideAsset: {fileID: 11400000, guid: c0cebf76d8b063c4380b60bdb11313e6, type: 2}
   showHelpText: 1
