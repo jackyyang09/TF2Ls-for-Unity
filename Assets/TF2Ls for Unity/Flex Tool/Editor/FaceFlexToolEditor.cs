@@ -46,7 +46,7 @@ namespace TF2Ls
         SerializedProperty unclampSliders;
         SerializedProperty flexScale;
         SerializedProperty flexControlNames;
-        SerializedProperty flexControlRanges;
+        SerializedProperty flexControllers;
         SerializedProperty flexOps;
         SerializedProperty flexPresets;
         SerializedProperty qcFile;
@@ -54,18 +54,20 @@ namespace TF2Ls
         SerializedProperty vtaPath;
         SerializedProperty weightsL, weightsR;
 
+        SerializedObject qcFileObject;
+
         struct FlexControllerProps
         {
             public string NiceName;
             public SerializedProperty Value;
             public Vector2 Range;
+            public bool IsGmodMode;
         }
         Dictionary<string, FlexControllerProps> flexControllerProps = new Dictionary<string, FlexControllerProps>();
         List<string> filteredControllers;
         string searchFilter;
         GUIContent[] options;
         int selectedOption = 0;
-        SerializedObject qcFileObject;
         float[] animBackup;
         float animTime;
         AnimationWindow animWindow => EditorWindow.GetWindow<AnimationWindow>();
@@ -80,7 +82,7 @@ namespace TF2Ls
             unclampSliders = serializedObject.FindProperty(nameof(unclampSliders));
             flexScale = serializedObject.FindProperty(nameof(flexScale));
             flexControlNames = serializedObject.FindProperty(nameof(flexControlNames));
-            flexControlRanges = serializedObject.FindProperty(nameof(flexControlRanges));
+            flexControllers = serializedObject.FindProperty(nameof(flexControllers));
             flexOps = serializedObject.FindProperty(nameof(flexOps));
             flexPresets = serializedObject.FindProperty(nameof(flexPresets));
             qcFile = serializedObject.FindProperty(nameof(qcFile));
@@ -96,16 +98,19 @@ namespace TF2Ls
             {
                 qcFileObject = new SerializedObject(qcFile.objectReferenceValue);
 
-                for (int i = 0; i < flexControlNames.arraySize; i++)
+                for (int i = 0; i < flexControllers.arraySize; i++)
                 {
-                    var name = flexControlNames.GetArrayElementAtIndex(i).stringValue;
-                    var prop = new FlexControllerProps();
-                    prop.NiceName = ObjectNames.NicifyVariableName(name.Replace('_', ' '));
-                    prop.Value = qcFileObject.FindProperty(name);
-                    prop.Range = flexControlRanges.GetArrayElementAtIndex(i).vector2Value;
-                    flexControllerProps.Add(name, prop);
+                    var prop = flexControllers.GetArrayElementAtIndex(i);
+                    var name = prop.FindPropertyRelative("Name").stringValue;
+                    var newProp = new FlexControllerProps();
+                    newProp.NiceName = ObjectNames.NicifyVariableName(name.Replace('_', ' '));
+                    newProp.Value = qcFileObject.FindProperty("value" + i);
+                    newProp.Range = prop.FindPropertyRelative("Range").vector2Value;
+                    newProp.IsGmodMode = prop.FindPropertyRelative("IsGmod").boolValue;
+                    flexControllerProps.Add(name, newProp);
                 }
             }
+           
 
             ApplySearchFilter();
 
@@ -127,8 +132,6 @@ namespace TF2Ls
         {
             if (AnimationMode.InAnimationMode())
             {
-                if (qcFileObject == null) return;
-
                 if (animBackup == null)
                 {
                     string[] keys = new string[flexControllerProps.Keys.Count];
@@ -150,17 +153,10 @@ namespace TF2Ls
                     animTime = animWindow.time; 
                 }
 
-                (qcFile.objectReferenceValue as BaseQC).UpdateBlendShapes();
-                qcFileObject.ApplyModifiedProperties();
+                if (qcFileObject.hasModifiedProperties) script.UpdateBlendShapes();
             }
             else
             {
-                if (qcFileObject == null)
-                {
-                    animBackup = null;
-                    return;
-                }
-
                 if (animBackup != null)
                 {
                     string[] keys = new string[flexControllerProps.Keys.Count];
@@ -170,7 +166,8 @@ namespace TF2Ls
                         var prop = flexControllerProps[keys[i]].Value;
                         prop.floatValue = animBackup[i];
                     }
-                    qcFileObject.ApplyModifiedProperties();
+                    serializedObject.ApplyModifiedProperties();
+                    if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
                     animBackup = null;
                 }
             }
@@ -179,10 +176,13 @@ namespace TF2Ls
         void ApplyAnimationChanges()
         {
             var bindings = AnimationUtility.GetCurveBindings(animWindow.animationClip);
+            var keys = new string[flexControllerProps.Count];
+            flexControllerProps.Keys.CopyTo(keys, 0);
             for (int i = 0; i < bindings.Length; i++)
             {
                 var curve = AnimationUtility.GetEditorCurve(animWindow.animationClip, bindings[i]);
-                var prop = flexControllerProps[bindings[i].propertyName];
+                var index = System.Convert.ToInt16(bindings[i].propertyName.Remove(0, "value".Length));
+                var prop = flexControllerProps[keys[index]];
                 prop.Value.floatValue = curve.Evaluate(animWindow.time);
             }
         }
@@ -196,9 +196,9 @@ namespace TF2Ls
             {
                 EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
 
-                if (GUILayout.Button("Reset Importer Settings"))
+                if (GUILayout.Button("Revert Mesh Changes"))
                 {
-                    ResetImportSettings();
+                    RevertMeshChanges();
                 }
 
                 if (GUILayout.Button("Generate Blendshapes"))
@@ -209,6 +209,11 @@ namespace TF2Ls
                 if (GUILayout.Button("Generate Helper Component from .qc File"))
                 {
                     GenerateFile();
+                }
+
+                if (GUILayout.Button("Create Preset from Current Face"))
+                {
+
                 }
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
@@ -255,16 +260,8 @@ namespace TF2Ls
                 for (int i = 0; i < keys.Length; i++)
                 {
                     var prop = flexControllerProps[keys[i]];
-                    if (gmodMode.boolValue)
-                    {
-                        prop.Value.floatValue = gmodSliders.Contains(keys[i]) ? 0.5f : 0;
-                    }
-                    else
-                    {
-                        prop.Value.floatValue = 0;
-                    }
+                    prop.Value.floatValue = prop.IsGmodMode ? 0.5f : 0;
                 }
-                script.UpdateBlendShapes();
             }
             EditorGUILayout.EndHorizontal();
 
@@ -290,29 +287,29 @@ namespace TF2Ls
 
                     EditorGUI.BeginChangeCheck();
                     EditorGUILayout.Slider(prop, leftValue, p.Range.y, p.NiceName);
-                    if (EditorGUI.EndChangeCheck() && !animWindow.playing)
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        var e = EditorCurveBinding.FloatCurve(target.name, typeof(float), prop.name);
-                        var pm = new PropertyModification();
-                        pm.propertyPath = prop.propertyPath;
-                        pm.target = qcFile.objectReferenceValue;
-                        pm.value = prop.floatValue.ToString();
-
-                        AnimationMode.AddPropertyModification(e, pm, false);
-
-                        var animWindow = EditorWindow.GetWindow<AnimationWindow>();
-                        AnimationMode.BeginSampling();
-                        AnimationMode.SampleAnimationClip(gameObject, animWindow.animationClip, animWindow.time);
+                        //if (AnimationMode.InAnimationMode() && !animWindow.playing)
+                        //{
+                        //    var e = EditorCurveBinding.FloatCurve(target.name, typeof(float), prop.name);
+                        //    var pm = new PropertyModification();
+                        //    pm.propertyPath = prop.propertyPath;
+                        //    pm.target = target;
+                        //    pm.value = prop.floatValue.ToString();
+                        //
+                        //    AnimationMode.AddPropertyModification(e, pm, false);
+                        //
+                        //    AnimationMode.BeginSampling();
+                        //    AnimationMode.SampleAnimationClip(gameObject, animWindow.animationClip, animWindow.time);
+                        //    Debug.Log("UH OH");
+                        //}
                     }
                 }
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
 
-            if (serializedObject.hasModifiedProperties) serializedObject.ApplyModifiedProperties();
-            if (qcFileObject.hasModifiedProperties)
-            {
-                qcFileObject.ApplyModifiedProperties();
-            }
+            serializedObject.ApplyModifiedProperties();
+            if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
         }
 
         void CatalogPresets()
@@ -322,26 +319,6 @@ namespace TF2Ls
             {
                 options[i] = new GUIContent(
                     flexPresets.GetArrayElementAtIndex(i).FindPropertyRelative("Name").stringValue);
-            }
-        }
-
-        void ApplyPreset()
-        {
-            var selectedPreset = flexPresets.GetArrayElementAtIndex(selectedOption);
-            var names = selectedPreset.FindPropertyRelative("FlexNames");
-            var values = selectedPreset.FindPropertyRelative("FlexValues");
-            var balances = selectedPreset.FindPropertyRelative("FlexBalances");
-            var multiLevels = selectedPreset.FindPropertyRelative("FlexMultiLevels");
-            for (int i = 0; i < names.arraySize; i++)
-            {
-                var name = names.GetArrayElementAtIndex(i).stringValue;
-                var value = values.GetArrayElementAtIndex(i).floatValue;
-                var balance = balances.GetArrayElementAtIndex(i).floatValue;
-                var multiLevel = multiLevels.GetArrayElementAtIndex(i).floatValue;
-                if (balance > -1) // How is this calculated?
-                {
-                }
-                //flexControllerProps[name].Value.floatValue = 
             }
         }
 
@@ -369,7 +346,7 @@ namespace TF2Ls
         const float SmoothedX = 0.5f;
         const float Diff = 0.001f;
 
-        void ResetImportSettings()
+        void RevertMeshChanges()
         {
             var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
             ModelImporter modelImporter = importer as ModelImporter;
@@ -495,6 +472,7 @@ namespace TF2Ls
             EditorUtility.ClearProgressBar();
         }
 
+        #region .pre file logic
         void ImportDMEPresets()
         {
             var path = @"I:\My Drive\Modelling\TF2 Mods\Sniper\sniper_emotion.pre";
@@ -554,6 +532,27 @@ namespace TF2Ls
             }
         }
 
+        void ApplyPreset()
+        {
+            var selectedPreset = flexPresets.GetArrayElementAtIndex(selectedOption);
+            var names = selectedPreset.FindPropertyRelative("FlexNames");
+            var values = selectedPreset.FindPropertyRelative("FlexValues");
+            var balances = selectedPreset.FindPropertyRelative("FlexBalances");
+            var multiLevels = selectedPreset.FindPropertyRelative("FlexMultiLevels");
+            for (int i = 0; i < names.arraySize; i++)
+            {
+                var name = names.GetArrayElementAtIndex(i).stringValue;
+                var value = values.GetArrayElementAtIndex(i).floatValue;
+                var balance = balances.GetArrayElementAtIndex(i).floatValue;
+                var multiLevel = multiLevels.GetArrayElementAtIndex(i).floatValue;
+                if (balance > -1) // How is this calculated?
+                {
+                }
+                //flexControllerProps[name].Value.floatValue = 
+            }
+        }
+        #endregion
+
         string scriptPath;
         void GenerateFile()
         {
@@ -589,7 +588,7 @@ namespace TF2Ls
             var flexProps = new List<string>();
             var blendShapeCode = new List<string>();
             if (flexControlNames != null) flexControlNames.ClearArray();
-            if (flexControlRanges != null) flexControlRanges.ClearArray();
+            if (flexControllers != null) flexControllers.ClearArray();
 
             List<string> localVars = new List<string>();
             var qc = File.ReadAllLines(qcPath.stringValue);
@@ -600,15 +599,21 @@ namespace TF2Ls
                     qc[i] = qc[i].Substring(qc[i].IndexOf("flexcontroller ") + 15);
                     int quote = qc[i].IndexOf("\"") + 1;
                     var name = qc[i].Substring(quote, qc[i].Length - quote - 1);
-                    //Debug.Log(f.Name);
                     qc[i] = qc[i].Substring(qc[i].IndexOf("range") + 6);
                     Vector2 range = new Vector2();
                     float.TryParse(qc[i].Substring(0, qc[i].IndexOf(' ')), out range.x);
                     qc[i] = qc[i].Substring(qc[i].IndexOf(' ') + 1);
                     float.TryParse(qc[i].Substring(0, qc[i].IndexOf(' ')), out range.y);
 
+                    var newProp = flexControllers.AddAndReturnNewArrayElement();
                     flexControlNames.AddAndReturnNewArrayElement().stringValue = name;
-                    flexControlRanges.AddAndReturnNewArrayElement().vector2Value = range;
+                    newProp.FindPropertyRelative("Name").stringValue = name;
+                    if (gmodSliders.Contains(name.Replace('_', ' ')))
+                    {
+                        range = new Vector2(-1, 1);
+                        newProp.FindPropertyRelative("IsGmod").boolValue = true;
+                    }
+                    newProp.FindPropertyRelative("Range").vector2Value = range;
                 }
                 else if (qc[i].Contains("localvar")) // Ignore these
                 {
@@ -645,9 +650,13 @@ namespace TF2Ls
             }
 
             writer.WriteLine("\n" + bigIndent + "// Flex Props");
-            for (int i = 0; i < flexControlNames.arraySize; i++)
+            for (int i = 0; i < flexControllers.arraySize; i++)
             {
-                writer.WriteLine(bigIndent + "[SerializeField] float " + flexControlNames.GetArrayElementAtIndex(i).stringValue + ";");
+                var prop = flexControllers.GetArrayElementAtIndex(i);
+                var name = prop.FindPropertyRelative("Name").stringValue;
+                writer.WriteLine(bigIndent + "[SerializeField] float value" + i + ";");
+                writer.WriteLine(bigIndent + "float " + name +
+                     " => faceFlex.ProcessValue(value" + i + ", " + i + ");");
             }
 
             writer.WriteLine("\n" + bigIndent + "// Blend Shape Props");

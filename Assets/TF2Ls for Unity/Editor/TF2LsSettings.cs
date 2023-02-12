@@ -9,12 +9,16 @@ namespace TF2Ls
 {
     public class TF2LsSettings : ScriptableObject
     {
+        [Tooltip("Folder in project to save/load Face Flex Presets. Will create if path doesn't exist.")]
+        [SerializeField] string flexPresetPath;
+        public string FlexPresetPath => flexPresetPath;
+
         [Tooltip("Font size of helper text")]
         [SerializeField] int helpTextSize = 10;
         public GUIStyle HelpTextStyle { get { return new GUIStyle(EditorStyles.helpBox).SetFontSize(helpTextSize); } }
 
         [SerializeField] string tfPath;
-        public string TFInstallPath { get { return tfPath; } }
+        public string TFInstallPath => tfPath;
         public bool TFInstallExists 
         { 
             get 
@@ -91,6 +95,7 @@ namespace TF2Ls
         public void Reset()
         {
             Undo.RecordObject(this, "Reset TF2LsSettings");
+            flexPresetPath = "Assets/TF2Ls for Unity/Face Flex Presets/";
             tfPath = "";
             helpTextSize = 10;
         }
@@ -113,11 +118,14 @@ namespace TF2Ls
                     EditorGUIUtility.labelWidth += 50;
 
                     var settings = TF2LsSettings.SerializedObject;
+                    SerializedProperty flexPresetPath = settings.FindProperty(nameof(flexPresetPath));
                     SerializedProperty helpTextSize = settings.FindProperty(nameof(helpTextSize));
                     SerializedProperty hlExtractExe = settings.FindProperty(nameof(hlExtractExe));
                     SerializedProperty vtfCmdExe = settings.FindProperty(nameof(vtfCmdExe));
                     SerializedProperty tfPath = settings.FindProperty(nameof(tfPath));
                     SerializedProperty unlockSystemObjects = settings.FindProperty(nameof(unlockSystemObjects));
+
+                    EditorHelper.RenderSmartFolderProperty(flexPresetPath.GUIContent(), flexPresetPath);
 
                     // Validate folder
                     EditorHelper.RenderSmartFolderProperty(new GUIContent("tf Path"), tfPath, false, "Select the tf folder within your TF2 installation path");

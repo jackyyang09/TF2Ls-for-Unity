@@ -11,13 +11,8 @@ namespace TF2Ls
         {
             public string Name;
             public Vector2 Range;
-            public float Value;
+            public bool IsGmod;
         }
-
-        //public class GMODController : FlexController
-        //{
-        //    public override float  } }
-        //}
 
         [System.Serializable]
         public class FlexPreset
@@ -34,11 +29,23 @@ namespace TF2Ls
         [SerializeField] float flexScale = 1;
         public float FlexScale { get { return flexScale; } }
         [SerializeField] List<string> flexControlNames;
-        [SerializeField] List<Vector2> flexControlRanges;
-        public FlexController GetControllerFromName(string n)
+        [SerializeField] List<FlexController> flexControllers;
+        public float ProcessValue(float raw, int index)
         {
-            //if (gmodMode) return gmodFlexControllers[flexControlNames.IndexOf(n)];
-            return new FlexController();
+            var control = flexControllers[index];
+            var range = control.Range;
+            float value;
+            
+            if (control.IsGmod)
+            {
+                value = Mathf.LerpUnclamped(range.x, range.y, raw);
+            }
+            else
+            {
+                value = raw;
+            }
+
+            return value;
         }
 
         [SerializeReference] List<FlexPreset> flexPresets;
