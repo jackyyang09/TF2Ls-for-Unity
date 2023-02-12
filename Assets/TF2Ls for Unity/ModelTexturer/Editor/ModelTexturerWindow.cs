@@ -6,7 +6,7 @@ using UnityEditor;
 using JackysEditorHelpers;
 using Ibasa.Valve.Vmt;
 
-namespace TFTools
+namespace TF2Ls
 {
     [CustomEditor(typeof(ModelTexturerData))]
     public class ModelTexturerEditor : Editor
@@ -142,7 +142,7 @@ namespace TFTools
         {
             if (SerializedObject != null) DesignateSerializedProperties();
             Undo.undoRedoPerformed += OnUndoRedo;
-            TFToolsAssPP.OnFinishImport = null;
+            TFToolsAssPP.OnTexturesImported = null;
         }
 
         private void OnUndoRedo() => GetWindow<ModelTexturerWindow>().Repaint();
@@ -150,7 +150,7 @@ namespace TFTools
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
-            TFToolsAssPP.OnFinishImport = null;
+            TFToolsAssPP.OnTexturesImported = null;
         }
 
         #region SerializedProperties & Variables
@@ -682,7 +682,7 @@ namespace TFTools
         }
 
         List<Material> existingMaterials;
-        List<Renderer> allRenderers;
+        List<Renderer> allRenderers = new List<Renderer>();
         List<string> materialsToGenerate;
         bool skipExistingMaterials;
 
@@ -813,9 +813,9 @@ namespace TFTools
 
             if (vtfs.Count > 0)
             {
-                TFToolsAssPP.OnFinishImport += (Texture2D[] tex) =>
+                TFToolsAssPP.OnTexturesImported += (Texture2D[] tex) =>
                 {
-                    TFToolsAssPP.OnFinishImport = null;
+                    TFToolsAssPP.OnTexturesImported = null;
                     textures.AddRange(tex);
                     ApplyTexturesToModel(textures);
                 };
@@ -1116,23 +1116,6 @@ namespace TFTools
         void RenderSettings()
         {
             EditorGUILayout.PropertyField(showHelpText);
-        }
-    }
-
-    // haha
-    class TFToolsAssPP : AssetPostprocessor
-    {
-        public static System.Action<Texture2D[]> OnFinishImport;
-
-        static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
-        {
-            List<Texture2D> loadedTextures = new List<Texture2D>();
-            for (int i = 0; i < importedAssets.Length; i++)
-            {
-                var t = AssetDatabase.LoadAssetAtPath<Texture2D>(importedAssets[i]);
-                if (t) loadedTextures.Add(t);
-            }
-            OnFinishImport?.Invoke(loadedTextures.ToArray());
         }
     }
 }

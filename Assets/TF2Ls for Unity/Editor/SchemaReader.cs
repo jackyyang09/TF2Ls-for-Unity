@@ -4,7 +4,7 @@ using Ibasa.Valve.Vmt;
 using System.IO;
 using System.Collections.Generic;
 
-namespace TFTools
+namespace TF2Ls
 {
     public class SchemaReader : BaseTFToolsEditor<SchemaReader>
     {

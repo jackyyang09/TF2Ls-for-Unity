@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace TFTools
+namespace TF2Ls
 {
     public class Node
     {

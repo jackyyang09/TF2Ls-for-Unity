@@ -5,7 +5,7 @@ using UnityEditor;
 using JackysEditorHelpers;
 using System.IO;
 
-namespace TFTools
+namespace TF2Ls
 {
     public class TF2LsSettings : ScriptableObject
     {

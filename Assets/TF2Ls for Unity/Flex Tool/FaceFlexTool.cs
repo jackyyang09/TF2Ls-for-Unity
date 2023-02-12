@@ -1,20 +1,68 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class FaceFlexTool : MonoBehaviour
+namespace TF2Ls
 {
-    [SerializeField] new SkinnedMeshRenderer renderer;
-
-    string path = @"I:\My Drive\Modelling\TF2 Mods\Sniper\sniper.qc";
-
-    [ContextMenu(nameof(ParseQCFile))]
-    void ParseQCFile()
+    [RequireComponent(typeof(SkinnedMeshRenderer))]
+    public class FaceFlexTool : MonoBehaviour
     {
-        var qc = System.IO.File.ReadAllLines(path);
-        for (int i = 0; i < qc.Length; i++)
+        [System.Serializable]
+        public class FlexController
         {
-            if (qc[i].Contains("flexcontroller")) Debug.Log(qc[i]);
+            public string Name;
+            public Vector2 Range;
+            public float Value;
+        }
+
+        //public class GMODController : FlexController
+        //{
+        //    public override float  } }
+        //}
+
+        [System.Serializable]
+        public class FlexPreset
+        {
+            public string Name;
+            public List<string> FlexNames;
+            public List<float> FlexValues;
+            public List<float> FlexBalances;
+            public List<float> FlexMultiLevels;
+        }
+
+        [SerializeField] new SkinnedMeshRenderer renderer;
+
+        [SerializeField] float flexScale = 1;
+        public float FlexScale { get { return flexScale; } }
+        [SerializeField] List<string> flexControlNames;
+        [SerializeField] List<Vector2> flexControlRanges;
+        public FlexController GetControllerFromName(string n)
+        {
+            //if (gmodMode) return gmodFlexControllers[flexControlNames.IndexOf(n)];
+            return new FlexController();
+        }
+
+        [SerializeReference] List<FlexPreset> flexPresets;
+
+        [SerializeField] BaseQC qcFile;
+
+        [SerializeField] [HideInInspector] string qcPath;
+
+        public Mesh Mesh { get { return renderer.sharedMesh; } }
+
+        [SerializeField] bool gmodMode = false;
+        [SerializeField] bool unclampSliders = false;
+
+        private void OnValidate()
+        {
+            if (!qcFile) qcFile = GetComponent<BaseQC>();
+            if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
+            UpdateBlendShapes();
+        }
+
+        [ContextMenu(nameof(UpdateBlendShapes))]
+        public void UpdateBlendShapes()
+        {
+            if (qcFile) qcFile.UpdateBlendShapes();
         }
     }
 }

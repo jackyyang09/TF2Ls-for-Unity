@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace TFTools
+namespace TF2Ls
 {
     public class ModelTexturerData: ScriptableObject
     {

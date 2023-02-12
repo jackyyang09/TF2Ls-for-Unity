@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEditor.AssetImporters;
 using System.IO;
 
-namespace TFTools
+namespace TF2Ls
 {
     //[ScriptedImporter(1, "vtf")]
     //public class VTFImporter : ScriptedImporter

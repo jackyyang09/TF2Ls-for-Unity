@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
-namespace TFTools
+namespace TF2Ls
 {
     public abstract class BaseTFToolsEditor<T> : EditorWindow
         where T : EditorWindow

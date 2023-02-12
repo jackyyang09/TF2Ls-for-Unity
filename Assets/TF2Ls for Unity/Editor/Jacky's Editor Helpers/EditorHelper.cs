@@ -104,6 +104,15 @@ namespace JackysEditorHelpers
             EditorGUILayout.EndHorizontal();
         }
 
+        public static void RenderSmartFileProperty(GUIContent content, SerializedProperty folderProp, string extension, bool limitToAssetFolder = true, string panelTitle = "Specify a New Folder")
+        {
+            EditorGUILayout.BeginHorizontal();
+            SmartFolderField(content, folderProp, limitToAssetFolder);
+            if (!limitToAssetFolder) 
+                SmartBrowseButton(folderProp, extension, limitToAssetFolder, panelTitle);
+            EditorGUILayout.EndHorizontal();
+        }
+
         public static void SmartFolderField(GUIContent content, SerializedProperty folderProp, bool limitToAssetsFolder = true)
         {
             string folderPath = folderProp.stringValue;
@@ -341,6 +350,15 @@ namespace JackysEditorHelpers
             }
 
             EditorGUILayout.IntPopup(property, displayOptions, optionValues);
+        }
+
+        /// <summary>
+        /// Equivalent to the FileUtil version, but works with backslashes
+        /// </summary>
+        /// <returns></returns>
+        public static string GetProjectRelativePath(string path)
+        {
+            return FileUtil.GetProjectRelativePath(path.Replace('\\', '/'));
         }
     }
 
