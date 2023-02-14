@@ -6,6 +6,7 @@ namespace TF2Ls
 {
     public class FlexPreset : ScriptableObject
     {
+        public float flexScale;
         public string[] flexControllerNames;
         public float[] values;
     }

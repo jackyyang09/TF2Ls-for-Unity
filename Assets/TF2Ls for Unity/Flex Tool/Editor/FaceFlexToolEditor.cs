@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.EditorTools;
 using System.IO;
 using JackysEditorHelpers;
 
@@ -10,40 +11,40 @@ namespace TF2Ls
     [CustomEditor(typeof(FaceFlexTool))]
     public class FaceFlexToolEditor : Editor
     {
-        const string SHOW_SETUP = "FACEFLEXTOOL_SHOW_SETUP";
-        static bool showSetup
+        enum MenuState
         {
-            get { return EditorPrefs.GetBool(SHOW_SETUP); }
-            set { EditorPrefs.SetBool(SHOW_SETUP, value); }
+            Setup,
+            FacePoser
         }
 
-        const string SHOW_CONTROLLERS = "FACEFLEXTOOL_SHOW_CONTROLLERS";
-        static bool showControllers
+        static string MENU_STATE_KEY => nameof(FaceFlexToolEditor) + nameof(MENU_STATE_KEY);
+        static MenuState CurrentMenuState
         {
-            get { return EditorPrefs.GetBool(SHOW_CONTROLLERS); }
-            set { EditorPrefs.SetBool(SHOW_CONTROLLERS, value); }
+            get => (MenuState)EditorPrefs.GetInt(MENU_STATE_KEY);
+            set => EditorPrefs.SetInt(MENU_STATE_KEY, (int)value);
         }
 
-        const string FOCUSED_INDEX = "FACEFLEXTOOL_FOCUSED_INDEX";
-        static int focusedIndex
+        static string LAST_FOLDER_KEY => nameof(FaceFlexToolEditor) + nameof(LAST_FOLDER_KEY);
+        static string LastFolder
         {
-            get { return EditorPrefs.GetInt(FOCUSED_INDEX); }
-            set { EditorPrefs.SetInt(FOCUSED_INDEX, value); }
+            get => EditorPrefs.GetString(LAST_FOLDER_KEY, "Assets");
+            set => EditorPrefs.SetString(LAST_FOLDER_KEY, value);
         }
 
-        static List<string> gmodSliders = new List<string>
-        {
-            "right CloseLid", "left CloseLid", "multi CloseLid", "right ScalpD",
-            "left ScalpD", "right BrowInV", "left BrowInV", "right NoseV", "left NoseV",
-            "right NostrilFlare", "left NostrilFlare", "right CheekH", "left CheekH",
-            "JawD", "JawH", "JawV", "right LipsV", "left LipsV", "right LipUpV",
-            "left LipUpV", "right LipLoV", "left LipLoV", "multi Smile", "right FoldLipUp",
-            "left FoldLipUp", "right FoldLipLo", "left FoldLipLo", "TongueD", "TongueH"
-        };
+        enum ControllerShowState
+        { 
+            Hidden,
+            Visible,
+            Expanded
+        }
 
-        FaceFlexTool script;
-        SerializedProperty gmodMode;
-        SerializedProperty unclampSliders;
+        static string CONTROLLER_VISIBLE_KEY => nameof(FaceFlexToolEditor) + nameof(CONTROLLER_VISIBLE_KEY);
+        static ControllerShowState ControllerVisibility
+        {
+            get => (ControllerShowState)EditorPrefs.GetInt(CONTROLLER_VISIBLE_KEY);
+            set => EditorPrefs.SetInt(CONTROLLER_VISIBLE_KEY, (int)value);
+        }
+
         SerializedProperty flexScale;
         SerializedProperty flexControlNames;
         SerializedProperty flexControllers;
@@ -61,25 +62,27 @@ namespace TF2Ls
             public string NiceName;
             public SerializedProperty Value;
             public Vector2 Range;
-            public bool IsGmodMode;
         }
+
         Dictionary<string, FlexControllerProps> flexControllerProps = new Dictionary<string, FlexControllerProps>();
         List<string> filteredControllers;
         string searchFilter;
-        GUIContent[] options;
-        int selectedOption = 0;
+
         float[] animBackup;
         float animTime;
-        AnimationWindow animWindow => EditorWindow.GetWindow<AnimationWindow>();
 
+        static float scroll;
+
+        List<FlexPreset> referencePresets;
+
+        FaceFlexTool script => target as FaceFlexTool;
+        AnimationWindow animWindow => EditorWindow.GetWindow<AnimationWindow>();
         GameObject gameObject => script.gameObject;
+
+        static string PresetPath => Path.Combine(TF2LsSettings.Settings.PackagePath, "Flex Tool", "Presets");
 
         private void OnEnable()
         {
-            script = target as FaceFlexTool;
-
-            gmodMode = serializedObject.FindProperty(nameof(gmodMode));
-            unclampSliders = serializedObject.FindProperty(nameof(unclampSliders));
             flexScale = serializedObject.FindProperty(nameof(flexScale));
             flexControlNames = serializedObject.FindProperty(nameof(flexControlNames));
             flexControllers = serializedObject.FindProperty(nameof(flexControllers));
@@ -106,15 +109,13 @@ namespace TF2Ls
                     newProp.NiceName = ObjectNames.NicifyVariableName(name.Replace('_', ' '));
                     newProp.Value = qcFileObject.FindProperty("value" + i);
                     newProp.Range = prop.FindPropertyRelative("Range").vector2Value;
-                    newProp.IsGmodMode = prop.FindPropertyRelative("IsGmod").boolValue;
                     flexControllerProps.Add(name, newProp);
                 }
             }
-           
 
             ApplySearchFilter();
 
-            CatalogPresets();
+            LoadReferencePresets();
         }
 
         private void OnDisable()
@@ -130,12 +131,13 @@ namespace TF2Ls
 
         void Update()
         {
+            if (qcFileObject == null) return;
+
             if (AnimationMode.InAnimationMode())
             {
                 if (animBackup == null)
                 {
-                    string[] keys = new string[flexControllerProps.Keys.Count];
-                    flexControllerProps.Keys.CopyTo(keys, 0);
+                    string[] keys = flexControllerProps.GetKeysCached();
                     animBackup = new float[flexControllerProps.Keys.Count];
                     for (int i = 0; i < keys.Length; i++)
                     {
@@ -159,8 +161,7 @@ namespace TF2Ls
             {
                 if (animBackup != null)
                 {
-                    string[] keys = new string[flexControllerProps.Keys.Count];
-                    flexControllerProps.Keys.CopyTo(keys, 0);
+                    string[] keys = flexControllerProps.GetKeysCached();
                     for (int i = 0; i < animBackup.Length; i++)
                     {
                         var prop = flexControllerProps[keys[i]].Value;
@@ -176,10 +177,10 @@ namespace TF2Ls
         void ApplyAnimationChanges()
         {
             var bindings = AnimationUtility.GetCurveBindings(animWindow.animationClip);
-            var keys = new string[flexControllerProps.Count];
-            flexControllerProps.Keys.CopyTo(keys, 0);
+            var keys = flexControllerProps.GetKeysCached();
             for (int i = 0; i < bindings.Length; i++)
             {
+                if (bindings[i].path != gameObject.name || !bindings[i].propertyName.Contains("value")) continue;
                 var curve = AnimationUtility.GetEditorCurve(animWindow.animationClip, bindings[i]);
                 var index = System.Convert.ToInt16(bindings[i].propertyName.Remove(0, "value".Length));
                 var prop = flexControllerProps[keys[index]];
@@ -191,48 +192,148 @@ namespace TF2Ls
         {
             serializedObject.Update();
 
-            showSetup = EditorGUILayout.BeginFoldoutHeaderGroup(showSetup, new GUIContent("Setup"));
-            if (showSetup)
+            EditorGUILayout.BeginHorizontal();
+
+            GUIStyle leftStyle = EditorStyles.miniButtonLeft;
+            if (CurrentMenuState == MenuState.Setup) EditorHelper.BeginColourChange(EditorHelper.ButtonPressedColor);
+            else EditorHelper.BeginColourChange(EditorHelper.ButtonColor);
+
+            if (GUILayout.Button("FacePoser", leftStyle))
             {
-                EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
-
-                if (GUILayout.Button("Revert Mesh Changes"))
-                {
-                    RevertMeshChanges();
-                }
-
-                if (GUILayout.Button("Generate Blendshapes"))
-                {
-                    SplitBlendShapes();
-                }
-
-                if (GUILayout.Button("Generate Helper Component from .qc File"))
-                {
-                    GenerateFile();
-                }
-
-                if (GUILayout.Button("Create Preset from Current Face"))
-                {
-
-                }
+                CurrentMenuState = MenuState.FacePoser;
             }
-            EditorGUILayout.EndFoldoutHeaderGroup();
 
-            //if (GUILayout.Button("Import Preset"))
-            //{
-            //    ImportDMEPresets();
-            //    CatalogPresets();
-            //}
+            EditorHelper.EndColourChange();
 
-            //EditorGUI.BeginChangeCheck();
-            //selectedOption = EditorGUILayout.Popup(selectedOption, options);
-            //if (EditorGUI.EndChangeCheck())
-            //{
-            //    ApplyPreset();
-            //}
+            GUIStyle rightStyle = EditorStyles.miniButtonRight;
+            if (CurrentMenuState == MenuState.FacePoser) EditorHelper.BeginColourChange(EditorHelper.ButtonPressedColor);
+            else EditorHelper.BeginColourChange(EditorHelper.ButtonColor);
 
-            EditorGUILayout.PropertyField(gmodMode, new GUIContent("Enable GMOD Compatibility"));
-            EditorGUILayout.PropertyField(unclampSliders, new GUIContent("Unclamp Sliders"));
+            if (GUILayout.Button("Setup", rightStyle))
+            {
+                CurrentMenuState = MenuState.Setup;
+            }
+
+            EditorHelper.EndColourChange();
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.Space();
+
+            switch (CurrentMenuState)
+            {
+                case MenuState.Setup:
+                    RenderSetupGUI();
+                    break;
+                case MenuState.FacePoser:
+                    if (qcFileObject != null)
+                    {
+                        qcFileObject.Update();
+                    }
+
+                    RenderFaceposerGUI();
+
+                    if (qcFileObject != null)
+                    {
+                        if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
+                    }
+                    break;
+            }
+            EditorGUILayout.EndVertical();
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        GUIStyle titleStyle => EditorStyles.boldLabel
+                .ApplyBoldText()
+                .ApplyTextAnchor(TextAnchor.MiddleCenter)
+                .SetFontSize(20);
+
+        void RenderSetupGUI()
+        {
+            EditorGUILayout.LabelField("Setup", titleStyle);
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Convert Blend Shapes to Valve's Flex system",
+                EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
+
+            EditorGUILayout.Space();
+
+            EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.BeginHorizontal();
+
+            if (GUILayout.Button("Generate Blendshapes"))
+            {
+                SplitBlendShapes();
+            }
+
+            if (GUILayout.Button("Revert Mesh Changes"))
+            {
+                RevertMeshChanges();
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space();
+
+            if (GUILayout.Button("Generate Helper Component from .qc File"))
+            {
+                GenerateFile();
+            }
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.PropertyField(qcFile, new GUIContent(
+                "QC Helper", ""));
+        }
+
+        void RenderFaceposerGUI()
+        {
+            EditorGUILayout.LabelField("Faceposer", titleStyle);
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Alter the expressions of Source-engine models",
+                EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
+
+            EditorGUILayout.Space();
+
+            EditorGUI.BeginDisabledGroup(qcFileObject == null);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.PrefixLabel("Reset to Reference");
+            if (EditorGUILayout.DropdownButton(new GUIContent("Pick From List to Apply"), FocusType.Keyboard))
+            {
+                var menu = new GenericMenu();
+                for (int i = 0; i < referencePresets.Count; i++)
+                {
+                    var c = new GUIContent(referencePresets[i].name);
+                    menu.AddItem(c, false, LoadFaceFromPreset, referencePresets[i]);
+                }
+                menu.ShowAsContext();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Save As Preset"))
+            {
+                CreatePresetFromFace();
+            }
+
+            if (GUILayout.Button("Load Face from Preset"))
+            {
+                OpenLoadPresetDialog();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space();
+
             EditorGUILayout.PropertyField(flexScale);
             EditorGUILayout.LabelField(
                 "Higher values distort the face in horrible ways. Keep between 1 and 2 for " +
@@ -242,10 +343,9 @@ namespace TF2Ls
             EditorGUILayout.Space();
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("       Randomize       "))
+            if (GUILayout.Button("Randomize Sliders"))
             {
-                string[] keys = new string[flexControllerProps.Keys.Count];
-                flexControllerProps.Keys.CopyTo(keys, 0);
+                string[] keys = flexControllerProps.GetKeysCached();
                 for (int i = 0; i < keys.Length; i++)
                 {
                     var prop = flexControllerProps[keys[i]];
@@ -253,22 +353,21 @@ namespace TF2Ls
                 }
             }
 
-            if (GUILayout.Button("Reset Controllers"))
+            if (GUILayout.Button("Reset Sliders"))
             {
-                var keys = new string[flexControllerProps.Count];
-                flexControllerProps.Keys.CopyTo(keys, 0);
-                for (int i = 0; i < keys.Length; i++)
-                {
-                    var prop = flexControllerProps[keys[i]];
-                    prop.Value.floatValue = prop.IsGmodMode ? 0.5f : 0;
-                }
+                LoadFaceFromPreset(referencePresets[0]);
             }
+
             EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button("Toggle Slider Visibility"))
+            {
+                ControllerVisibility = (ControllerShowState)Mathf.Repeat((int)ControllerVisibility + 1, (int)ControllerShowState.Expanded + 1);
+            }
 
             EditorGUILayout.Space();
 
-            showControllers = EditorGUILayout.BeginFoldoutHeaderGroup(showControllers, new GUIContent("Show Controllers"));
-            if (showControllers)
+            if (ControllerVisibility != ControllerShowState.Hidden)
             {
                 EditorGUI.BeginChangeCheck();
                 searchFilter = EditorGUILayout.TextField("Quick Filter", searchFilter);
@@ -277,49 +376,86 @@ namespace TF2Ls
                     ApplySearchFilter();
                 }
 
+                if (ControllerVisibility == ControllerShowState.Visible && filteredControllers.Count > 0)
+                {
+                    scroll = EditorGUILayout.BeginScrollView(new Vector2(0, scroll),
+                    new GUILayoutOption[] { GUILayout.MaxHeight(400) }).y;
+                }
+
                 for (int i = 0; i < filteredControllers.Count; i++)
                 {
                     var p = flexControllerProps[filteredControllers[i]];
-                    //bool adjustSlider = gmodMode.boolValue && gmodSliders.Contains(filteredControllers[i]);
 
                     SerializedProperty prop = p.Value;
-                    float leftValue = unclampSliders.boolValue ? -1 : p.Range.x;
+                    //float leftValue = unclampSliders.boolValue ? -1 : p.Range.x;
+                    float leftValue = -1;
 
-                    EditorGUI.BeginChangeCheck();
                     EditorGUILayout.Slider(prop, leftValue, p.Range.y, p.NiceName);
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        //if (AnimationMode.InAnimationMode() && !animWindow.playing)
-                        //{
-                        //    var e = EditorCurveBinding.FloatCurve(target.name, typeof(float), prop.name);
-                        //    var pm = new PropertyModification();
-                        //    pm.propertyPath = prop.propertyPath;
-                        //    pm.target = target;
-                        //    pm.value = prop.floatValue.ToString();
-                        //
-                        //    AnimationMode.AddPropertyModification(e, pm, false);
-                        //
-                        //    AnimationMode.BeginSampling();
-                        //    AnimationMode.SampleAnimationClip(gameObject, animWindow.animationClip, animWindow.time);
-                        //    Debug.Log("UH OH");
-                        //}
-                    }
                 }
-            }
-            EditorGUILayout.EndFoldoutHeaderGroup();
 
-            serializedObject.ApplyModifiedProperties();
-            if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
+                if (ControllerVisibility == ControllerShowState.Visible && filteredControllers.Count > 0)
+                    EditorGUILayout.EndScrollView();
+            }
+
+            EditorGUI.EndDisabledGroup();
         }
 
-        void CatalogPresets()
+        void LoadReferencePresets()
         {
-            options = new GUIContent[flexPresets.arraySize];
-            for (int i = 0; i < options.Length; i++)
+            referencePresets = EditorHelper.ImportAssetsAtPath<FlexPreset>(PresetPath);
+        }
+
+        void CreatePresetFromFace()
+        {
+            serializedObject.ApplyModifiedProperties();
+
+            var path = EditorHelper.OpenSmartSaveFileDialog(out FlexPreset newPreset, "New Face Preset", LastFolder);
+
+            if (newPreset == null) return;
+
+            newPreset.flexScale = flexScale.floatValue;
+
+            var keys = flexControllerProps.GetKeysCached();
+            newPreset.flexControllerNames = new string[keys.Length];
+            newPreset.values = new float[keys.Length];
+            for (int i = 0; i < keys.Length; i++)
             {
-                options[i] = new GUIContent(
-                    flexPresets.GetArrayElementAtIndex(i).FindPropertyRelative("Name").stringValue);
+                newPreset.flexControllerNames[i] = keys[i];
+                newPreset.values[i] = flexControllerProps[keys[i]].Value.floatValue;
             }
+
+            LastFolder = path;
+
+            Selection.activeGameObject = gameObject;
+        }
+
+        void OpenLoadPresetDialog()
+        {
+            var path = EditorUtility.OpenFilePanel("Open Face Preset", LastFolder, "asset");
+            path = EditorHelper.GetProjectRelativePath(path);
+
+            if (string.IsNullOrEmpty(path)) return;
+
+            var preset = AssetDatabase.LoadAssetAtPath<FlexPreset>(path);
+            LoadFaceFromPreset(preset);
+
+            LastFolder = path;
+        }
+
+        void LoadFaceFromPreset(object input)
+        {
+            var preset = input as FlexPreset;
+
+            flexScale.floatValue = preset.flexScale;
+
+            for (int i = 0; i < preset.flexControllerNames.Length; i++)
+            {
+                if (!flexControllerProps.ContainsKey(preset.flexControllerNames[i])) continue;
+                flexControllerProps[preset.flexControllerNames[i]].Value.floatValue = preset.values[i];
+            }
+
+            if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
+            serializedObject.ApplyModifiedProperties();
         }
 
         void ApplySearchFilter()
@@ -532,6 +668,7 @@ namespace TF2Ls
             }
         }
 
+        int selectedOption;
         void ApplyPreset()
         {
             var selectedPreset = flexPresets.GetArrayElementAtIndex(selectedOption);
@@ -574,7 +711,7 @@ namespace TF2Ls
 
             writer.Write("/**" +
                 "\n* File generated by TF2Ls" +
-                "\n* You are recommended to not touch it" +
+                "\n* Do not modify unless you know what you're doing" +
                 "\n*/ ");
 
             writer.WriteLine("\nusing UnityEngine;");
@@ -608,11 +745,6 @@ namespace TF2Ls
                     var newProp = flexControllers.AddAndReturnNewArrayElement();
                     flexControlNames.AddAndReturnNewArrayElement().stringValue = name;
                     newProp.FindPropertyRelative("Name").stringValue = name;
-                    if (gmodSliders.Contains(name.Replace('_', ' ')))
-                    {
-                        range = new Vector2(-1, 1);
-                        newProp.FindPropertyRelative("IsGmod").boolValue = true;
-                    }
                     newProp.FindPropertyRelative("Range").vector2Value = range;
                 }
                 else if (qc[i].Contains("localvar")) // Ignore these
@@ -654,7 +786,7 @@ namespace TF2Ls
             {
                 var prop = flexControllers.GetArrayElementAtIndex(i);
                 var name = prop.FindPropertyRelative("Name").stringValue;
-                writer.WriteLine(bigIndent + "[SerializeField] float value" + i + ";");
+                writer.WriteLine(bigIndent + "[SerializeField, HideInInspector] float value" + i + ";");
                 writer.WriteLine(bigIndent + "float " + name +
                      " => faceFlex.ProcessValue(value" + i + ", " + i + ");");
             }
@@ -700,9 +832,8 @@ namespace TF2Ls
 
         private void AddHelperComponent(MonoScript obj)
         {
-            Debug.Log("Hey");
-            //Debug.Log(obj.GetClass());
-            //script.gameObject.AddComponent(s.GetClass());
+            TFToolsAssPP.OnMonoScriptImported -= AddHelperComponent;
+            script.gameObject.AddComponent(obj.GetClass());
         }
 
         void GenerateBlendShapes()

@@ -7,6 +7,9 @@ namespace JackysEditorHelpers
 {
     public class EditorHelper : Editor
     {
+        public static Color ButtonPressedColor => GUI.color.Add(new Color(0.2f, 0.2f, 0.2f, 0));
+        public static Color ButtonColor => GUI.color.Subtract(new Color(0.2f, 0.2f, 0.2f, 0));
+
         public static string OpenSmartSaveFileDialog<T>(out T asset, string defaultName = "New Object", string startingPath = "Assets") where T : ScriptableObject
         {
             string savePath = EditorUtility.SaveFilePanel("Designate Save Path", startingPath, defaultName, "asset");
@@ -359,6 +362,56 @@ namespace JackysEditorHelpers
         public static string GetProjectRelativePath(string path)
         {
             return FileUtil.GetProjectRelativePath(path.Replace('\\', '/'));
+        }
+
+        static Color guiColor;
+        public static void BeginColourChange(Color color)
+        {
+            guiColor = GUI.color;
+            GUI.color = color;
+        }
+
+        public static void EndColourChange() => GUI.color = guiColor;
+
+        static Color guiBackgroundColor;
+        public static void BeginBackgroundColourChange(Color color)
+        {
+            guiBackgroundColor = GUI.backgroundColor;
+            GUI.backgroundColor = color;
+        }
+
+        public static void EndBackgroundColourChange() => GUI.backgroundColor = guiBackgroundColor;
+    }
+
+    public static class Extensions
+    {
+        public static T[] GetKeysCached<T, U>(this Dictionary<T, U> d)
+        {
+            T[] keys = new T[d.Keys.Count];
+            d.Keys.CopyTo(keys, 0);
+            return keys;
+        }
+
+        public static Color Add(this Color thisColor, Color otherColor)
+        {
+            return new Color
+            {
+                r = Mathf.Clamp01(thisColor.r + otherColor.r),
+                g = Mathf.Clamp01(thisColor.g + otherColor.g),
+                b = Mathf.Clamp01(thisColor.b + otherColor.g),
+                a = Mathf.Clamp01(thisColor.a + otherColor.a)
+            };
+        }
+
+        public static Color Subtract(this Color thisColor, Color otherColor)
+        {
+            return new Color
+            {
+                r = Mathf.Clamp01(thisColor.r - otherColor.r),
+                g = Mathf.Clamp01(thisColor.g - otherColor.g),
+                b = Mathf.Clamp01(thisColor.b - otherColor.g),
+                a = Mathf.Clamp01(thisColor.a - otherColor.a)
+            };
         }
     }
 

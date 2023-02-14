@@ -11,7 +11,6 @@ namespace TF2Ls
         {
             public string Name;
             public Vector2 Range;
-            public bool IsGmod;
         }
 
         [System.Serializable]
@@ -36,14 +35,7 @@ namespace TF2Ls
             var range = control.Range;
             float value;
             
-            if (control.IsGmod)
-            {
-                value = Mathf.LerpUnclamped(range.x, range.y, raw);
-            }
-            else
-            {
-                value = raw;
-            }
+            value = Mathf.LerpUnclamped(range.x, range.y, raw);
 
             return value;
         }
@@ -56,12 +48,9 @@ namespace TF2Ls
 
         public Mesh Mesh { get { return renderer.sharedMesh; } }
 
-        [SerializeField] bool gmodMode = false;
-        [SerializeField] bool unclampSliders = false;
-
         private void OnValidate()
         {
-            if (!qcFile) qcFile = GetComponent<BaseQC>();
+            //if (!qcFile) qcFile = GetComponent<BaseQC>();
             if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
             UpdateBlendShapes();
         }
