@@ -102,7 +102,7 @@ namespace JackysEditorHelpers
         public static void RenderSmartFolderProperty(GUIContent content, SerializedProperty folderProp, bool limitToAssetFolder = true, string panelTitle = "Specify a New Folder")
         {
             EditorGUILayout.BeginHorizontal();
-            SmartFolderField(content, folderProp, limitToAssetFolder);
+            SmartAssetField(content, folderProp, limitToAssetFolder);
             SmartBrowseButton(folderProp, limitToAssetFolder, panelTitle);
             EditorGUILayout.EndHorizontal();
         }
@@ -110,13 +110,13 @@ namespace JackysEditorHelpers
         public static void RenderSmartFileProperty(GUIContent content, SerializedProperty folderProp, string extension, bool limitToAssetFolder = true, string panelTitle = "Specify a New Folder")
         {
             EditorGUILayout.BeginHorizontal();
-            SmartFolderField(content, folderProp, limitToAssetFolder);
+            SmartAssetField(content, folderProp, limitToAssetFolder);
             if (!limitToAssetFolder) 
                 SmartBrowseButton(folderProp, extension, limitToAssetFolder, panelTitle);
             EditorGUILayout.EndHorizontal();
         }
 
-        public static void SmartFolderField(GUIContent content, SerializedProperty folderProp, bool limitToAssetsFolder = true)
+        public static void SmartAssetField(GUIContent content, SerializedProperty folderProp, bool limitToAssetsFolder = true)
         {
             string folderPath = folderProp.stringValue;
             //if (folderPath == string.Empty) folderPath = Application.dataPath;

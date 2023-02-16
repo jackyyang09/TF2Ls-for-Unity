@@ -1,11 +1,11 @@
 using UnityEngine;
 
-namespace TF2Ls
+namespace TF2Ls.FaceFlex
 {
     public abstract class BaseQC : MonoBehaviour
     {
-        [SerializeField] protected FaceFlexTool faceFlex;
-        [SerializeField] protected new SkinnedMeshRenderer renderer;
+        [SerializeField, HideInInspector] protected FaceFlexTool faceFlex;
+        [SerializeField, HideInInspector] protected new SkinnedMeshRenderer renderer;
         public Mesh mesh { get { return renderer.sharedMesh; } }
 
         protected float FlexScale { get { return faceFlex.FlexScale; } }

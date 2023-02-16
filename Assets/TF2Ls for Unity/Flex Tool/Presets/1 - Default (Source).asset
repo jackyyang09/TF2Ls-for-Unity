@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 413deac9b1e3f0a42bd5c01dbf403017, type: 3}
-  m_Name: 0 - Default
+  m_Name: 1 - Default (Source)
   m_EditorClassIdentifier: 
   flexScale: 1
   flexControllerNames:
@@ -71,48 +71,48 @@ MonoBehaviour:
   - eyes_updown
   - eyes_rightleft
   values:
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0
-  - 0.5
-  - 0.5
   - 0
   - 0
   - 0
   - 0
-  - 0.5
-  - 0.5
   - 0
   - 0
   - 0
   - 0
-  - 0.5
-  - 0.5
-  - 0.5
   - 0
   - 0
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
   - 0
   - 0
-  - 0.5
   - 0
   - 0
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.5
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
   - 0
   - 0
   - 0

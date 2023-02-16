@@ -1,28 +1,33 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace TF2Ls
+namespace TF2Ls.FaceFlex
 {
-    [RequireComponent(typeof(SkinnedMeshRenderer))]
+    [System.Serializable]
+    public class FlexController
+    {
+        public string Name;
+        public Vector2 Range;
+    }
+
+    [System.Serializable]
+    public class FacePreset
+    {
+        public string Name;
+        public List<string> FlexNames;
+        public List<float> FlexValues;
+        public List<float> FlexBalances;
+        public List<float> FlexMultiLevels;
+    }
+
+    public enum MenuState
+    {
+        Setup,
+        FacePoser
+    }
+
     public class FaceFlexTool : MonoBehaviour
     {
-        [System.Serializable]
-        public class FlexController
-        {
-            public string Name;
-            public Vector2 Range;
-        }
-
-        [System.Serializable]
-        public class FlexPreset
-        {
-            public string Name;
-            public List<string> FlexNames;
-            public List<float> FlexValues;
-            public List<float> FlexBalances;
-            public List<float> FlexMultiLevels;
-        }
-
         [SerializeField] new SkinnedMeshRenderer renderer;
 
         [SerializeField] float flexScale = 1;
@@ -47,11 +52,28 @@ namespace TF2Ls
         [SerializeField] [HideInInspector] string qcPath;
 
         public Mesh Mesh { get { return renderer.sharedMesh; } }
+        public bool MeshBlendshapesConverted
+        {
+            get
+            {
+                if (!renderer) return false;
+                for (int i = 0; i < Mesh.blendShapeCount; i++)
+                {
+                    if (Mesh.GetBlendShapeName(i).Contains("+")) return false;
+                }
+                return true;
+            }
+        }
+
+        [SerializeField] MenuState menuState = MenuState.Setup;
 
         private void OnValidate()
         {
-            //if (!qcFile) qcFile = GetComponent<BaseQC>();
-            if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
+            if (menuState == MenuState.Setup)
+            {
+                if (!qcFile) qcFile = GetComponent<BaseQC>();
+                if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
+            }
             UpdateBlendShapes();
         }
 

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace TF2Ls
+namespace TF2Ls.FaceFlex
 {
     public class FlexPreset : ScriptableObject
     {

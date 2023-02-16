@@ -6,24 +6,11 @@ using UnityEditor.EditorTools;
 using System.IO;
 using JackysEditorHelpers;
 
-namespace TF2Ls
+namespace TF2Ls.FaceFlex
 {
     [CustomEditor(typeof(FaceFlexTool))]
     public class FaceFlexToolEditor : Editor
     {
-        enum MenuState
-        {
-            Setup,
-            FacePoser
-        }
-
-        static string MENU_STATE_KEY => nameof(FaceFlexToolEditor) + nameof(MENU_STATE_KEY);
-        static MenuState CurrentMenuState
-        {
-            get => (MenuState)EditorPrefs.GetInt(MENU_STATE_KEY);
-            set => EditorPrefs.SetInt(MENU_STATE_KEY, (int)value);
-        }
-
         static string LAST_FOLDER_KEY => nameof(FaceFlexToolEditor) + nameof(LAST_FOLDER_KEY);
         static string LastFolder
         {
@@ -45,6 +32,7 @@ namespace TF2Ls
             set => EditorPrefs.SetInt(CONTROLLER_VISIBLE_KEY, (int)value);
         }
 
+        SerializedProperty renderer;
         SerializedProperty flexScale;
         SerializedProperty flexControlNames;
         SerializedProperty flexControllers;
@@ -54,6 +42,7 @@ namespace TF2Ls
         SerializedProperty qcPath;
         SerializedProperty vtaPath;
         SerializedProperty weightsL, weightsR;
+        SerializedProperty menuState;
 
         SerializedObject qcFileObject;
 
@@ -63,6 +52,8 @@ namespace TF2Ls
             public SerializedProperty Value;
             public Vector2 Range;
         }
+
+        DefaultAsset qcPathAsset;
 
         Dictionary<string, FlexControllerProps> flexControllerProps = new Dictionary<string, FlexControllerProps>();
         List<string> filteredControllers;
@@ -83,6 +74,7 @@ namespace TF2Ls
 
         private void OnEnable()
         {
+            renderer = serializedObject.FindProperty(nameof(renderer));
             flexScale = serializedObject.FindProperty(nameof(flexScale));
             flexControlNames = serializedObject.FindProperty(nameof(flexControlNames));
             flexControllers = serializedObject.FindProperty(nameof(flexControllers));
@@ -93,9 +85,9 @@ namespace TF2Ls
             vtaPath = serializedObject.FindProperty(nameof(vtaPath));
             weightsL = serializedObject.FindProperty(nameof(weightsL));
             weightsR = serializedObject.FindProperty(nameof(weightsR));
+            menuState = serializedObject.FindProperty(nameof(menuState));
 
-            Undo.undoRedoPerformed += OnUndoRedoPerformed;
-            EditorApplication.update += Update;
+            qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
 
             if (qcFile.objectReferenceValue)
             {
@@ -112,10 +104,18 @@ namespace TF2Ls
                     flexControllerProps.Add(name, newProp);
                 }
             }
+            else
+            {
+                menuState.enumValueIndex = 0;
+                serializedObject.ApplyModifiedProperties();
+            }
 
             ApplySearchFilter();
 
             LoadReferencePresets();
+
+            Undo.undoRedoPerformed += OnUndoRedoPerformed;
+            EditorApplication.update += Update;
         }
 
         private void OnDisable()
@@ -195,26 +195,30 @@ namespace TF2Ls
             EditorGUILayout.BeginHorizontal();
 
             GUIStyle leftStyle = EditorStyles.miniButtonLeft;
-            if (CurrentMenuState == MenuState.Setup) EditorHelper.BeginColourChange(EditorHelper.ButtonPressedColor);
-            else EditorHelper.BeginColourChange(EditorHelper.ButtonColor);
-
-            if (GUILayout.Button("FacePoser", leftStyle))
+            string buttonLabel = "  FacePoser  ";
+            if (menuState.enumValueIndex == (int)MenuState.FacePoser)
             {
-                CurrentMenuState = MenuState.FacePoser;
+                leftStyle = leftStyle.ApplyBoldText();
+                buttonLabel = "[ FacePoser ]";
             }
 
-            EditorHelper.EndColourChange();
+            if (GUILayout.Button(buttonLabel, leftStyle))
+            {
+                menuState.enumValueIndex = (int)MenuState.FacePoser;
+            }
 
+            buttonLabel = "    Setup    ";
             GUIStyle rightStyle = EditorStyles.miniButtonRight;
-            if (CurrentMenuState == MenuState.FacePoser) EditorHelper.BeginColourChange(EditorHelper.ButtonPressedColor);
-            else EditorHelper.BeginColourChange(EditorHelper.ButtonColor);
-
-            if (GUILayout.Button("Setup", rightStyle))
+            if (menuState.enumValueIndex == (int)MenuState.Setup)
             {
-                CurrentMenuState = MenuState.Setup;
+                rightStyle = rightStyle.ApplyBoldText();
+                buttonLabel = "  [ Setup ]  ";
             }
 
-            EditorHelper.EndColourChange();
+            if (GUILayout.Button(buttonLabel, rightStyle))
+            {
+                menuState.enumValueIndex = (int)MenuState.Setup;
+            }
 
             EditorGUILayout.EndHorizontal();
 
@@ -222,7 +226,7 @@ namespace TF2Ls
 
             EditorGUILayout.Space();
 
-            switch (CurrentMenuState)
+            switch ((MenuState)menuState.enumValueIndex)
             {
                 case MenuState.Setup:
                     RenderSetupGUI();
@@ -260,37 +264,50 @@ namespace TF2Ls
             EditorGUILayout.LabelField("Convert Blend Shapes to Valve's Flex system",
                 EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
 
+            RenderWarnings();
+
             EditorGUILayout.Space();
 
+            EditorGUILayout.LabelField(ObjectNames.GetClassName(script) + " needs a reference to your " +
+                "model's SkinnedMeshRenderer component in order to change mesh data and allow Face Flex manipulation.",
+                TF2LsSettings.Settings.HelpTextStyle);
+
+            EditorGUILayout.PropertyField(renderer);
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("To properly convert your mesh's Blendshapes into flexes, " +
+                "add your mesh's .qc file to your project and get a reference to it in the field below.",
+                TF2LsSettings.Settings.HelpTextStyle);
+
+            EditorGUI.BeginChangeCheck();
             EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
+            if (EditorGUI.EndChangeCheck())
+            {
+                qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
+            }
 
             EditorGUILayout.Space();
 
-            EditorGUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Generate Blendshapes"))
+            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || !qcPathAsset || string.IsNullOrEmpty(qcPath.stringValue));
+            if (GUILayout.Button(new GUIContent("Convert Blendshapes", 
+                "Converts your mesh's Blendshapes into usable Face Flexes.")))
             {
-                SplitBlendShapes();
+                TrySplitBlendShapes();
             }
-
-            if (GUILayout.Button("Revert Mesh Changes"))
-            {
-                RevertMeshChanges();
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-
-            if (GUILayout.Button("Generate Helper Component from .qc File"))
-            {
-                GenerateFile();
-            }
+            EditorGUI.EndDisabledGroup();
 
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(qcFile, new GUIContent(
                 "QC Helper", ""));
+
+            EditorGUI.BeginDisabledGroup(!script.MeshBlendshapesConverted || !qcFile.objectReferenceValue);
+            if (GUILayout.Button("Generate Helper Component from .qc File"))
+            {
+                GenerateFile();
+            }
+            EditorGUI.EndDisabledGroup();
         }
 
         void RenderFaceposerGUI()
@@ -302,12 +319,14 @@ namespace TF2Ls
             EditorGUILayout.LabelField("Alter the expressions of Source-engine models",
                 EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
 
+            RenderWarnings();
+
             EditorGUILayout.Space();
 
-            EditorGUI.BeginDisabledGroup(qcFileObject == null);
+            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || qcFileObject == null);
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PrefixLabel("Reset to Reference");
+            EditorGUILayout.PrefixLabel("Apply Reference Preset");
             if (EditorGUILayout.DropdownButton(new GUIContent("Pick From List to Apply"), FocusType.Keyboard))
             {
                 var menu = new GenericMenu();
@@ -326,7 +345,7 @@ namespace TF2Ls
                 CreatePresetFromFace();
             }
 
-            if (GUILayout.Button("Load Face from Preset"))
+            if (GUILayout.Button("Load Face from Saved Preset"))
             {
                 OpenLoadPresetDialog();
             }
@@ -353,7 +372,7 @@ namespace TF2Ls
                 }
             }
 
-            if (GUILayout.Button("Reset Sliders"))
+            if (GUILayout.Button("Reset to Reference"))
             {
                 LoadFaceFromPreset(referencePresets[0]);
             }
@@ -398,6 +417,23 @@ namespace TF2Ls
             }
 
             EditorGUI.EndDisabledGroup();
+        }
+
+        void RenderWarnings()
+        {
+            if (!qcFile.objectReferenceValue)
+            {
+                EditorGUILayout.HelpBox("Couldn't find a QC Helper component!" +
+                    "Make sure you've completed setting up the Face Flex Tool."
+                , MessageType.Error);
+            }
+
+            if (!script.MeshBlendshapesConverted)
+            {
+                EditorGUILayout.HelpBox("Your mesh's Blendshapes haven't been converted. " +
+                    "Make sure you've completed setting up the Face Flex Tool."
+                , MessageType.Error);
+            }
         }
 
         void LoadReferencePresets()
@@ -493,15 +529,53 @@ namespace TF2Ls
             modelImporter.SaveAndReimport();
         }
 
-        void SplitBlendShapes()
+        void TrySplitBlendShapes()
         {
-            var v = script.Mesh.vertices;
+            var choice = EditorUtility.DisplayDialog("Confirm Blendshape Conversion",
+                "This process directly converts your mesh assets's Blendshapes to conform to the Valve's Flex format.\n" +
+                "These changes will only be reflected within the Unity Editor, so you can revert " +
+                "the changes at any time by re-importing your model.\n\n" +
+                "Are you ready to go through with the conversion?",
+                "Yes!", "No!");
+
+            #region Secret Third Option
+            //var path = AssetDatabase.GetAssetPath(script.Mesh);
+            //
+            //string savePath = EditorUtility.SaveFilePanel("Designate Save Path", path, script.Mesh.name + " - Converted", "asset");
+            //
+            //if (string.IsNullOrEmpty(savePath)) return;
+            //
+            //savePath = EditorHelper.GetProjectRelativePath(savePath);
+            //var m = MeshSaverUtility.SaveMesh(SplitBlendshapes(), savePath);
+            //
+            //var rendererSO = new SerializedObject(renderer.objectReferenceValue);
+            //
+            //rendererSO.FindProperty("m_Mesh").objectReferenceValue = m;
+            //rendererSO.ApplyModifiedProperties();
+            //
+            //EditorUtility.DisplayDialog("Conversion Successful!", "Once you close this dialog, " +
+            //    "the cloned mesh will be automatically applied to your SkinnedMeshRenderer " +
+            //    "component.", "Got it!");
+            //EditorGUIUtility.PingObject(m);
+            #endregion
+
+            if (!choice) return;
+            SplitBlendshapes();
+
+            EditorUtility.DisplayDialog("Conversion Successful!", "Remember, you can revert " +
+                "these changes by re-importing your mesh.", "Got it!");
+        }
+
+        Mesh SplitBlendshapes()
+        {
+            var mesh = script.Mesh;
+            var v = mesh.vertices;
 
             var weightsL = new float[v.Length];
             var weightsR = new float[v.Length];
             for (int i = 0; i < v.Length; i++)
             {
-                EditorUtility.DisplayProgressBar("Creating New BlendShapes", 
+                EditorUtility.DisplayProgressBar("Creating New BlendShapes",
                     "Calculating left/right vertex weights", (float)i / (float)v.Length);
                 if (Mathf.Abs(v[i].x) < MaxX)
                 {
@@ -550,20 +624,20 @@ namespace TF2Ls
             List<Vector3[]> blendShapeNormals = new List<Vector3[]>();
             List<Vector3[]> blendShapeTangents = new List<Vector3[]>();
 
-            for (int i = 0; i < script.Mesh.blendShapeCount; i++)
+            for (int i = 0; i < mesh.blendShapeCount; i++)
             {
-                var verts = new Vector3[script.Mesh.vertexCount];
-                var normals = new Vector3[script.Mesh.vertexCount];
-                var tangents = new Vector3[script.Mesh.vertexCount];
+                var verts = new Vector3[mesh.vertexCount];
+                var normals = new Vector3[mesh.vertexCount];
+                var tangents = new Vector3[mesh.vertexCount];
 
-                script.Mesh.GetBlendShapeFrameVertices(i, 0, verts, normals, tangents);
+                mesh.GetBlendShapeFrameVertices(i, 0, verts, normals, tangents);
 
                 blendShapeDeltas.Add(verts);
                 blendShapeNormals.Add(normals);
                 blendShapeTangents.Add(tangents);
             }
 
-            script.Mesh.ClearBlendShapes();
+            mesh.ClearBlendShapes();
 
             for (int i = 0; i < blendShapeNames.Count; i++)
             {
@@ -572,7 +646,7 @@ namespace TF2Ls
 
                 if (!blendShapeNames[i].Contains("+"))
                 {
-                    script.Mesh.AddBlendShapeFrame(blendShapeNames[i], 1, blendShapeDeltas[i], blendShapeNormals[i], blendShapeTangents[i]);
+                    mesh.AddBlendShapeFrame(blendShapeNames[i], 1, blendShapeDeltas[i], blendShapeNormals[i], blendShapeTangents[i]);
                 }
                 else
                 {
@@ -584,7 +658,7 @@ namespace TF2Ls
                         leftDeltas[j] = blendShapeDeltas[i][j] * weightsL[j];
                         leftNormals[j] = blendShapeNormals[i][j] * weightsL[j];
                     }
-                    script.Mesh.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, leftNormals, blendShapeTangents[i]);
+                    mesh.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, leftNormals, blendShapeTangents[i]);
 
                     var rightDeltas = new Vector3[v.Length];
                     var rightNormals = new Vector3[v.Length];
@@ -593,19 +667,13 @@ namespace TF2Ls
                         rightDeltas[j] = blendShapeDeltas[i][j] * weightsR[j];
                         rightNormals[j] = blendShapeNormals[i][j] * weightsR[j];
                     }
-                    script.Mesh.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, rightNormals, blendShapeTangents[i]);
+                    mesh.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, rightNormals, blendShapeTangents[i]);
                 }
             }
 
-            string meshPath = AssetDatabase.GetAssetPath(script.Mesh);
-            meshPath = meshPath.Remove(meshPath.IndexOf(".")) + ".asset";
-            var m = MeshSaverUtility.SaveMesh(script.Mesh, meshPath);
-
-            var renderer = new SerializedObject(serializedObject.FindProperty("renderer").objectReferenceValue);
-            renderer.FindProperty("m_Mesh").objectReferenceValue = m;
-            renderer.ApplyModifiedProperties();
-
             EditorUtility.ClearProgressBar();
+
+            return mesh;
         }
 
         #region .pre file logic
@@ -620,7 +688,7 @@ namespace TF2Ls
             {
                 if (preFile[i].Contains("DmePreset"))
                 {
-                    var newPreset = new FaceFlexTool.FlexPreset();
+                    var newPreset = new FacePreset();
                     newPreset.FlexNames = new List<string>();
                     newPreset.FlexValues = new List<float>();
                     newPreset.FlexBalances = new List<float>();
@@ -716,7 +784,7 @@ namespace TF2Ls
 
             writer.WriteLine("\nusing UnityEngine;");
 
-            writer.WriteLine("namespace " + nameof(TF2Ls) + " {");
+            writer.WriteLine("namespace TF2Ls.FaceFlex {");
 
             string indent = "    ";
             string bigIndent = indent + indent;
@@ -833,7 +901,10 @@ namespace TF2Ls
         private void AddHelperComponent(MonoScript obj)
         {
             TFToolsAssPP.OnMonoScriptImported -= AddHelperComponent;
-            script.gameObject.AddComponent(obj.GetClass());
+            if (!script.gameObject.GetComponent(obj.GetClass()))
+            {
+                script.gameObject.AddComponent(obj.GetClass());
+            }
         }
 
         void GenerateBlendShapes()
