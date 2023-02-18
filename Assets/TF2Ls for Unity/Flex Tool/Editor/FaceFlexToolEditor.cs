@@ -34,6 +34,7 @@ namespace TF2Ls.FaceFlex
 
         SerializedProperty renderer;
         SerializedProperty flexScale;
+        SerializedProperty blendshapeNames;
         SerializedProperty flexControlNames;
         SerializedProperty flexControllers;
         SerializedProperty flexOps;
@@ -76,6 +77,7 @@ namespace TF2Ls.FaceFlex
         {
             renderer = serializedObject.FindProperty(nameof(renderer));
             flexScale = serializedObject.FindProperty(nameof(flexScale));
+            blendshapeNames = serializedObject.FindProperty(nameof(blendshapeNames));
             flexControlNames = serializedObject.FindProperty(nameof(flexControlNames));
             flexControllers = serializedObject.FindProperty(nameof(flexControllers));
             flexOps = serializedObject.FindProperty(nameof(flexOps));
@@ -154,8 +156,6 @@ namespace TF2Ls.FaceFlex
                     ApplyAnimationChanges();
                     animTime = animWindow.time; 
                 }
-
-                if (qcFileObject.hasModifiedProperties) script.UpdateBlendShapes();
             }
             else
             {
@@ -186,6 +186,8 @@ namespace TF2Ls.FaceFlex
                 var prop = flexControllerProps[keys[index]];
                 prop.Value.floatValue = curve.Evaluate(animWindow.time);
             }
+
+            script.UpdateBlendShapes();
         }
 
         public override void OnInspectorGUI()
@@ -293,7 +295,7 @@ namespace TF2Ls.FaceFlex
             if (GUILayout.Button(new GUIContent("Convert Blendshapes", 
                 "Converts your mesh's Blendshapes into usable Face Flexes.")))
             {
-                TrySplitBlendShapes();
+                ParseQCFile();
             }
             EditorGUI.EndDisabledGroup();
 
@@ -302,7 +304,7 @@ namespace TF2Ls.FaceFlex
             EditorGUILayout.PropertyField(qcFile, new GUIContent(
                 "QC Helper", ""));
 
-            EditorGUI.BeginDisabledGroup(!script.MeshBlendshapesConverted || !qcFile.objectReferenceValue);
+            EditorGUI.BeginDisabledGroup(!script.MeshBlendshapesConverted || string.IsNullOrEmpty(qcPath.stringValue));
             if (GUILayout.Button("Generate Helper Component from .qc File"))
             {
                 GenerateFile();
@@ -423,7 +425,7 @@ namespace TF2Ls.FaceFlex
         {
             if (!qcFile.objectReferenceValue)
             {
-                EditorGUILayout.HelpBox("Couldn't find a QC Helper component!" +
+                EditorGUILayout.HelpBox("Couldn't find a QC Helper component! " +
                     "Make sure you've completed setting up the Face Flex Tool."
                 , MessageType.Error);
             }
@@ -529,7 +531,7 @@ namespace TF2Ls.FaceFlex
             modelImporter.SaveAndReimport();
         }
 
-        void TrySplitBlendShapes()
+        void ParseQCFile()
         {
             var choice = EditorUtility.DisplayDialog("Confirm Blendshape Conversion",
                 "This process directly converts your mesh assets's Blendshapes to conform to the Valve's Flex format.\n" +
@@ -538,61 +540,10 @@ namespace TF2Ls.FaceFlex
                 "Are you ready to go through with the conversion?",
                 "Yes!", "No!");
 
-            #region Secret Third Option
-            //var path = AssetDatabase.GetAssetPath(script.Mesh);
-            //
-            //string savePath = EditorUtility.SaveFilePanel("Designate Save Path", path, script.Mesh.name + " - Converted", "asset");
-            //
-            //if (string.IsNullOrEmpty(savePath)) return;
-            //
-            //savePath = EditorHelper.GetProjectRelativePath(savePath);
-            //var m = MeshSaverUtility.SaveMesh(SplitBlendshapes(), savePath);
-            //
-            //var rendererSO = new SerializedObject(renderer.objectReferenceValue);
-            //
-            //rendererSO.FindProperty("m_Mesh").objectReferenceValue = m;
-            //rendererSO.ApplyModifiedProperties();
-            //
-            //EditorUtility.DisplayDialog("Conversion Successful!", "Once you close this dialog, " +
-            //    "the cloned mesh will be automatically applied to your SkinnedMeshRenderer " +
-            //    "component.", "Got it!");
-            //EditorGUIUtility.PingObject(m);
-            #endregion
-
             if (!choice) return;
-            SplitBlendshapes();
+            //SplitBlendshapes();
 
-            EditorUtility.DisplayDialog("Conversion Successful!", "Remember, you can revert " +
-                "these changes by re-importing your mesh.", "Got it!");
-        }
-
-        Mesh SplitBlendshapes()
-        {
-            var mesh = script.Mesh;
-            var v = mesh.vertices;
-
-            var weightsL = new float[v.Length];
-            var weightsR = new float[v.Length];
-            for (int i = 0; i < v.Length; i++)
-            {
-                EditorUtility.DisplayProgressBar("Creating New BlendShapes",
-                    "Calculating left/right vertex weights", (float)i / (float)v.Length);
-                if (Mathf.Abs(v[i].x) < MaxX)
-                {
-                    if (v[i].x < 0)
-                    {
-                        weightsL[i] = Mathf.Lerp(1, 0.5f, Mathf.InverseLerp(-SmoothedX, 0, v[i].x));
-                        weightsR[i] = Mathf.Lerp(0, 0.5f, Mathf.InverseLerp(-SmoothedX, 0, v[i].x));
-                    }
-                    else
-                    {
-                        weightsL[i] = Mathf.Lerp(0.5f, 0, Mathf.InverseLerp(0, SmoothedX, v[i].x));
-                        weightsR[i] = Mathf.Lerp(0.5f, 1, Mathf.InverseLerp(0, SmoothedX, v[i].x));
-                    }
-                }
-            }
-
-            List<string> blendShapeNames = new List<string>();
+            blendshapeNames.ClearArray();
 
             bool flexFileOpen = false;
             var qc = File.ReadAllLines(Path.Combine(Directory.GetCurrentDirectory(), qcPath.stringValue));
@@ -610,70 +561,15 @@ namespace TF2Ls.FaceFlex
                         splits[1] = splits[1].Trim('"');
                         if (splits[0] == "flexpair")
                         {
-                            blendShapeNames.Add(splits[1] + "L+" + splits[1] + "R");
+                            blendshapeNames.AddAndReturnNewArrayElement().stringValue = splits[1] + "L+" + splits[1] + "R";
                         }
                         else if (splits[0] == "flex")
                         {
-                            blendShapeNames.Add(splits[1]);
+                            blendshapeNames.AddAndReturnNewArrayElement().stringValue = splits[1];
                         }
                     }
                 }
             }
-
-            List<Vector3[]> blendShapeDeltas = new List<Vector3[]>();
-            List<Vector3[]> blendShapeNormals = new List<Vector3[]>();
-            List<Vector3[]> blendShapeTangents = new List<Vector3[]>();
-
-            for (int i = 0; i < mesh.blendShapeCount; i++)
-            {
-                var verts = new Vector3[mesh.vertexCount];
-                var normals = new Vector3[mesh.vertexCount];
-                var tangents = new Vector3[mesh.vertexCount];
-
-                mesh.GetBlendShapeFrameVertices(i, 0, verts, normals, tangents);
-
-                blendShapeDeltas.Add(verts);
-                blendShapeNormals.Add(normals);
-                blendShapeTangents.Add(tangents);
-            }
-
-            mesh.ClearBlendShapes();
-
-            for (int i = 0; i < blendShapeNames.Count; i++)
-            {
-                EditorUtility.DisplayProgressBar("Creating New BlendShapes",
-                    "Generating BlendShape " + blendShapeNames[i], (float)i / (float)blendShapeNames.Count);
-
-                if (!blendShapeNames[i].Contains("+"))
-                {
-                    mesh.AddBlendShapeFrame(blendShapeNames[i], 1, blendShapeDeltas[i], blendShapeNormals[i], blendShapeTangents[i]);
-                }
-                else
-                {
-                    var nameSplits = blendShapeNames[i].Split('+');
-                    var leftDeltas = new Vector3[v.Length];
-                    var leftNormals = new Vector3[v.Length];
-                    for (int j = 0; j < leftDeltas.Length; j++)
-                    {
-                        leftDeltas[j] = blendShapeDeltas[i][j] * weightsL[j];
-                        leftNormals[j] = blendShapeNormals[i][j] * weightsL[j];
-                    }
-                    mesh.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, leftNormals, blendShapeTangents[i]);
-
-                    var rightDeltas = new Vector3[v.Length];
-                    var rightNormals = new Vector3[v.Length];
-                    for (int j = 0; j < leftDeltas.Length; j++)
-                    {
-                        rightDeltas[j] = blendShapeDeltas[i][j] * weightsR[j];
-                        rightNormals[j] = blendShapeNormals[i][j] * weightsR[j];
-                    }
-                    mesh.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, rightNormals, blendShapeTangents[i]);
-                }
-            }
-
-            EditorUtility.ClearProgressBar();
-
-            return mesh;
         }
 
         #region .pre file logic
@@ -889,12 +785,6 @@ namespace TF2Ls.FaceFlex
 
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Done!", 1);
 
-            //BaseQC existingQC;
-            //if (script.gameObject.TryGetComponent(out existingQC))
-            //{
-            //    DestroyImmediate(existingQC);
-            //}
-
             EditorUtility.ClearProgressBar();
         }
 
@@ -907,6 +797,7 @@ namespace TF2Ls.FaceFlex
             }
         }
 
+        #region Deprecated
         void GenerateBlendShapes()
         {
             var v = script.Mesh.vertices;
@@ -1053,5 +944,6 @@ namespace TF2Ls.FaceFlex
                 }
             }
         }
+        #endregion
     }
 }

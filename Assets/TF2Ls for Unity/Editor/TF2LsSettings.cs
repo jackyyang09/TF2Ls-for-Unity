@@ -30,6 +30,8 @@ namespace TF2Ls
             packagePath = path.Remove(path.IndexOf("/Editor/TF2LsSettings.asset"));
         }
 
+        public static string ResourcesPath => "Assets/Resources/TF2Ls Generated";
+
         [Tooltip("Font size of helper text")]
         [SerializeField] int helpTextSize = 10;
         public GUIStyle HelpTextStyle { get { return new GUIStyle(EditorStyles.helpBox).SetFontSize(helpTextSize); } }
