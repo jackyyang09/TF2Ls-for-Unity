@@ -8,6 +8,12 @@ namespace TF2Ls
     public enum CharacterClass { Scout, Soldier, Pyro, Demoman, Heavy, Engineer, Medic, Sniper, Spy }
     public enum Team { RED, BLU }
 
+    public class TF2Colors
+    {
+        public static Color BUFF = new Color(0.6f, 0.8f, 1f);
+        public static Color DEBUFF = new Color(1, 0.25f, 0.25f);
+    }
+
     [System.Serializable]
     public struct ItemProperties
     {

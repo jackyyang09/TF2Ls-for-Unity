@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace TF2Ls.FaceFlex
 {
@@ -74,36 +77,12 @@ namespace TF2Ls.FaceFlex
             }
         }
 
-        [SerializeField] MenuState menuState = MenuState.Setup;
-
         private void Awake()
         {
-            if (!ConvertedMeshList.List.Contains(Mesh.name))
+            if (!MeshBlendshapesConverted)
             {
-                TryConvertSelf();
-                ConvertedMeshList.List.Add(Mesh.name);
+                SplitBlendshapes();
             }
-
-            if (!MeshBlendshapesConverted) return;
-        }
-
-        private void OnValidate()
-        {
-            if (menuState == MenuState.Setup)
-            {
-                if (!qcFile) qcFile = GetComponent<BaseQC>();
-                if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
-            }
-
-            if (!ConvertedMeshList.List.Contains(Mesh.name))
-            {
-                TryConvertSelf();
-                ConvertedMeshList.List.Add(Mesh.name);
-                return;
-            }
-
-            if (!MeshBlendshapesConverted) return;
-            UpdateBlendShapes();
         }
 
         void TryConvertSelf()
@@ -122,13 +101,90 @@ namespace TF2Ls.FaceFlex
             if (qcFile) qcFile.UpdateBlendShapes();
         }
 
+#if UNITY_EDITOR
+        [SerializeField] bool previewingMesh;
+        [SerializeField] MenuState menuState = MenuState.Setup;
+        Mesh backupMesh;
+
+        private void OnValidate()
+        {
+            if (menuState == MenuState.Setup)
+            {
+                if (!qcFile) qcFile = GetComponent<BaseQC>();
+                if (!renderer) renderer = GetComponent<SkinnedMeshRenderer>();
+            }
+
+            if (previewingMesh)
+            {
+                if (backupMesh == null)
+                {
+                    CreateMeshInstanceInEditor();
+                }
+
+                UpdateBlendShapes();
+            }
+            else if (!MeshBlendshapesConverted) return;
+        }
+
+        /// <summary>
+        /// This is what we call, a "Pro Gamer Move"
+        /// </summary>
+        [ContextMenu(nameof(CreateMeshInstanceInEditor))]
+        public bool CreateMeshInstanceInEditor()
+        {
+            if (renderer.sharedMesh == null) return false;
+
+            SplitBlendshapes();
+
+            var locker = renderer.gameObject.AddComponent<SMRLocker>();
+            locker.backupMesh = backupMesh;
+            locker.parent = this;
+            locker.hideFlags = HideFlags.HideAndDontSave;
+
+            return true;
+        }
+
+        [ContextMenu(nameof(UnloadEditorMesh))]
+        public void UnloadEditorMesh()
+        {
+            if (!previewingMesh) return;
+
+            previewingMesh = false;
+
+            DestroyImmediate(renderer.sharedMesh);
+
+            renderer.sharedMesh = backupMesh;
+
+            if (renderer.gameObject.TryGetComponent(out SMRLocker locker))
+            {
+                DestroyImmediate(locker);
+            }
+
+            backupMesh = null;
+        }
+#endif
+
         const float MaxX = 3.5f;
         const float SmoothedX = 0.5f;
         const float Diff = 0.001f;
 
         public void SplitBlendshapes()
         {
-            var v = Mesh.vertices;
+            if (!renderer) return;
+            if (!renderer.sharedMesh) return;
+
+#if UNITY_EDITOR
+            bool tainted = AssetDatabase.GetAssetPath(renderer.sharedMesh).Equals("");
+            if (tainted) return;
+
+            previewingMesh = true;
+
+            backupMesh = renderer.sharedMesh;
+#endif
+            Mesh meshClone = Instantiate(renderer.sharedMesh);
+            meshClone.hideFlags = HideFlags.HideAndDontSave;
+
+            var v = meshClone.vertices;
 
             var weightsL = new float[v.Length];
             var weightsR = new float[v.Length];
@@ -137,7 +193,7 @@ namespace TF2Ls.FaceFlex
 #if UNITY_EDITOR
                 if (!Application.isPlaying)
                 {
-                    UnityEditor.EditorUtility.DisplayProgressBar("Face Flex Tool",
+                    EditorUtility.DisplayProgressBar("Face Flex Tool",
                     "Calculating left/right vertex weights", (float)i / (float)v.Length);
                 }
 #endif
@@ -160,34 +216,34 @@ namespace TF2Ls.FaceFlex
             List<Vector3[]> blendShapeNormals = new List<Vector3[]>();
             List<Vector3[]> blendShapeTangents = new List<Vector3[]>();
 
-            for (int i = 0; i < Mesh.blendShapeCount; i++)
+            for (int i = 0; i < meshClone.blendShapeCount; i++)
             {
-                var verts = new Vector3[Mesh.vertexCount];
-                var normals = new Vector3[Mesh.vertexCount];
-                var tangents = new Vector3[Mesh.vertexCount];
+                var verts = new Vector3[meshClone.vertexCount];
+                var normals = new Vector3[meshClone.vertexCount];
+                var tangents = new Vector3[meshClone.vertexCount];
 
-                Mesh.GetBlendShapeFrameVertices(i, 0, verts, normals, tangents);
+                meshClone.GetBlendShapeFrameVertices(i, 0, verts, normals, tangents);
 
                 blendShapeDeltas.Add(verts);
                 blendShapeNormals.Add(normals);
                 blendShapeTangents.Add(tangents);
             }
 
-            Mesh.ClearBlendShapes();
+            meshClone.ClearBlendShapes();
 
             for (int i = 0; i < blendshapeNames.Count; i++)
             {
 #if UNITY_EDITOR
                 if (Application.isPlaying)
                 {
-                    UnityEditor.EditorUtility.DisplayProgressBar("Face Flex Tool",
+                    EditorUtility.DisplayProgressBar("Face Flex Tool",
                     "Generating BlendShape " + blendshapeNames[i], (float)i / (float)blendshapeNames.Count);
                 }
 #endif
 
                 if (!blendshapeNames[i].Contains("+"))
                 {
-                    Mesh.AddBlendShapeFrame(blendshapeNames[i], 1, blendShapeDeltas[i], blendShapeNormals[i], blendShapeTangents[i]);
+                    meshClone.AddBlendShapeFrame(blendshapeNames[i], 1, blendShapeDeltas[i], blendShapeNormals[i], blendShapeTangents[i]);
                 }
                 else
                 {
@@ -199,7 +255,7 @@ namespace TF2Ls.FaceFlex
                         leftDeltas[j] = blendShapeDeltas[i][j] * weightsL[j];
                         leftNormals[j] = blendShapeNormals[i][j] * weightsL[j];
                     }
-                    Mesh.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, leftNormals, blendShapeTangents[i]);
+                    meshClone.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, leftNormals, blendShapeTangents[i]);
 
                     var rightDeltas = new Vector3[v.Length];
                     var rightNormals = new Vector3[v.Length];
@@ -208,13 +264,14 @@ namespace TF2Ls.FaceFlex
                         rightDeltas[j] = blendShapeDeltas[i][j] * weightsR[j];
                         rightNormals[j] = blendShapeNormals[i][j] * weightsR[j];
                     }
-                    Mesh.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, rightNormals, blendShapeTangents[i]);
+                    meshClone.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, rightNormals, blendShapeTangents[i]);
                 }
             }
 
 #if UNITY_EDITOR
-            if (!Application.isPlaying) UnityEditor.EditorUtility.ClearProgressBar();
+            EditorUtility.ClearProgressBar();
 #endif
+            renderer.sharedMesh = meshClone;
         }
     }
 }

@@ -45,6 +45,8 @@ namespace TF2Ls.FaceFlex
         SerializedProperty weightsL, weightsR;
         SerializedProperty menuState;
 
+        SerializedProperty previewingMesh;
+
         SerializedObject qcFileObject;
 
         struct FlexControllerProps
@@ -89,6 +91,8 @@ namespace TF2Ls.FaceFlex
             weightsR = serializedObject.FindProperty(nameof(weightsR));
             menuState = serializedObject.FindProperty(nameof(menuState));
 
+            previewingMesh = serializedObject.FindProperty(nameof(previewingMesh));
+
             qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
 
             if (qcFile.objectReferenceValue)
@@ -118,12 +122,22 @@ namespace TF2Ls.FaceFlex
 
             Undo.undoRedoPerformed += OnUndoRedoPerformed;
             EditorApplication.update += Update;
+            EditorApplication.playModeStateChanged += PlayModeStateChanged;
         }
 
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             EditorApplication.update -= Update;
+            EditorApplication.playModeStateChanged -= PlayModeStateChanged;
+        }
+
+        private void PlayModeStateChanged(PlayModeStateChange obj)
+        {
+            if (obj == PlayModeStateChange.ExitingEditMode)
+            {
+                script.UnloadEditorMesh();
+            }
         }
 
         private void OnUndoRedoPerformed()
@@ -139,6 +153,16 @@ namespace TF2Ls.FaceFlex
             {
                 if (animBackup == null)
                 {
+                    if (!previewingMesh.boolValue && qcFileObject != null)
+                    {
+                        if (EditorUtility.DisplayDialog("Entered Animation Mode", "You just " +
+                            "entered Animation mode, do you want to enable Face Flex previews?",
+                            "Yes", "No"))
+                        {
+                            script.CreateMeshInstanceInEditor();
+                        }
+                    }
+
                     string[] keys = flexControllerProps.GetKeysCached();
                     animBackup = new float[flexControllerProps.Keys.Count];
                     for (int i = 0; i < keys.Length; i++)
@@ -176,6 +200,8 @@ namespace TF2Ls.FaceFlex
 
         void ApplyAnimationChanges()
         {
+            if (!script.MeshBlendshapesConverted) return;
+
             var bindings = AnimationUtility.GetCurveBindings(animWindow.animationClip);
             var keys = flexControllerProps.GetKeysCached();
             for (int i = 0; i < bindings.Length; i++)
@@ -270,6 +296,22 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.Space();
 
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.LabelField("Setup Status", EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter));
+
+            var style = EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.MiddleCenter);
+            if (renderer.objectReferenceValue && qcFileObject != null)
+            {
+                EditorGUILayout.LabelField("Finished!", style.SetTextColor(TF2Colors.BUFF));
+            }
+            else
+            {
+                EditorGUILayout.LabelField("Unfinished", style.SetTextColor(TF2Colors.DEBUFF));
+            }
+
+            EditorGUILayout.EndVertical();
+
             EditorGUILayout.LabelField(ObjectNames.GetClassName(script) + " needs a reference to your " +
                 "model's SkinnedMeshRenderer component in order to change mesh data and allow Face Flex manipulation.",
                 TF2LsSettings.Settings.HelpTextStyle);
@@ -289,13 +331,12 @@ namespace TF2Ls.FaceFlex
                 qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
             }
 
-            EditorGUILayout.Space();
-
             EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || !qcPathAsset || string.IsNullOrEmpty(qcPath.stringValue));
-            if (GUILayout.Button(new GUIContent("Convert Blendshapes", 
-                "Converts your mesh's Blendshapes into usable Face Flexes.")))
+            if (GUILayout.Button("Generate Helper Component from .qc File"))
             {
+                ApplyMeshImportSettings();
                 ParseQCFile();
+                GenerateFile();
             }
             EditorGUI.EndDisabledGroup();
 
@@ -303,13 +344,6 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.PropertyField(qcFile, new GUIContent(
                 "QC Helper", ""));
-
-            EditorGUI.BeginDisabledGroup(!script.MeshBlendshapesConverted || string.IsNullOrEmpty(qcPath.stringValue));
-            if (GUILayout.Button("Generate Helper Component from .qc File"))
-            {
-                GenerateFile();
-            }
-            EditorGUI.EndDisabledGroup();
         }
 
         void RenderFaceposerGUI()
@@ -325,7 +359,47 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.Space();
 
-            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || qcFileObject == null);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.LabelField("Flex Preview Status", EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter));
+
+            var style = EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.MiddleCenter);
+            if (previewingMesh.boolValue)
+            {
+                EditorGUILayout.LabelField("Previewing", style.SetTextColor(TF2Colors.BUFF));
+
+                EditorGUILayout.LabelField("Do NOT touch the SkinnedMeshRenderer component attached to\n" +
+                    "<b>" + renderer.objectReferenceValue.name + "</b>\n" +
+                    "until you stop previewing!\n\n" +
+                    "Otherwise, things will break!",
+                    EditorStyles.label.ApplyRichText()
+                    .ApplyTextAnchor(TextAnchor.MiddleCenter)
+                    .ApplyWordWrap());
+            }
+            else
+            {
+                EditorGUILayout.LabelField("Not Previewing", style.SetTextColor(TF2Colors.DEBUFF));
+            }
+
+            EditorGUI.BeginDisabledGroup(qcFileObject == null);
+            if (GUILayout.Button("Toggle Mesh Preview"))
+            {
+                if (previewingMesh.boolValue)
+                {
+                    script.UnloadEditorMesh();
+                }
+                else
+                {
+                    script.CreateMeshInstanceInEditor();
+                }
+            }
+            EditorGUI.EndDisabledGroup();
+
+            EditorGUILayout.EndVertical();
+
+            EditorGUILayout.Space();
+
+            EditorGUI.BeginDisabledGroup(!previewingMesh.boolValue);
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.PrefixLabel("Apply Reference Preset");
@@ -429,13 +503,6 @@ namespace TF2Ls.FaceFlex
                     "Make sure you've completed setting up the Face Flex Tool."
                 , MessageType.Error);
             }
-
-            if (!script.MeshBlendshapesConverted)
-            {
-                EditorGUILayout.HelpBox("Your mesh's Blendshapes haven't been converted. " +
-                    "Make sure you've completed setting up the Face Flex Tool."
-                , MessageType.Error);
-            }
         }
 
         void LoadReferencePresets()
@@ -520,6 +587,14 @@ namespace TF2Ls.FaceFlex
         const float SmoothedX = 0.5f;
         const float Diff = 0.001f;
 
+        void ApplyMeshImportSettings()
+        {
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
+            ModelImporter modelImporter = importer as ModelImporter;
+            modelImporter.isReadable = true;
+            modelImporter.SaveAndReimport();
+        }
+
         void RevertMeshChanges()
         {
             var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
@@ -533,15 +608,7 @@ namespace TF2Ls.FaceFlex
 
         void ParseQCFile()
         {
-            var choice = EditorUtility.DisplayDialog("Confirm Blendshape Conversion",
-                "This process directly converts your mesh assets's Blendshapes to conform to the Valve's Flex format.\n" +
-                "These changes will only be reflected within the Unity Editor, so you can revert " +
-                "the changes at any time by re-importing your model.\n\n" +
-                "Are you ready to go through with the conversion?",
-                "Yes!", "No!");
-
-            if (!choice) return;
-            //SplitBlendshapes();
+            script.SplitBlendshapes();
 
             blendshapeNames.ClearArray();
 
@@ -775,21 +842,30 @@ namespace TF2Ls.FaceFlex
 
             writer.Close();
 
+            script.UnloadEditorMesh();
+
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Importing and compiling...", 0.9f);
             scriptPath = EditorHelper.GetProjectRelativePath(scriptPath);
 
             TFToolsAssPP.OnMonoScriptImported += AddHelperComponent;
 
-            //Re-import the file to update the reference in the editor
-            AssetDatabase.ImportAsset(scriptPath);
+            EditorApplication.update += ImportScript;
 
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Done!", 1);
 
             EditorUtility.ClearProgressBar();
         }
 
+        public void ImportScript()
+        {
+            EditorApplication.update -= ImportScript;
+            //Re-import the file to update the reference in the editor
+            AssetDatabase.ImportAsset(scriptPath);
+        }
+
         private void AddHelperComponent(MonoScript obj)
         {
+            if (obj == null) return;
             TFToolsAssPP.OnMonoScriptImported -= AddHelperComponent;
             if (!script.gameObject.GetComponent(obj.GetClass()))
             {
