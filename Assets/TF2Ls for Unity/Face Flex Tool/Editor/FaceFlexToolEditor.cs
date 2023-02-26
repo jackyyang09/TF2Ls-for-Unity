@@ -18,8 +18,15 @@ namespace TF2Ls.FaceFlex
             set => EditorPrefs.SetString(LAST_FOLDER_KEY, value);
         }
 
+        static string PENDING_SCRIPT_KEY => nameof(FaceFlexToolEditor) + nameof(PENDING_SCRIPT_KEY);
+        static string ScriptPath
+        {
+            get => EditorPrefs.GetString(LAST_FOLDER_KEY);
+            set => EditorPrefs.SetString(LAST_FOLDER_KEY, value);
+        }
+
         enum ControllerShowState
-        { 
+        {
             Hidden,
             Visible,
             Expanded
@@ -33,17 +40,20 @@ namespace TF2Ls.FaceFlex
         }
 
         SerializedProperty renderer;
+        SerializedProperty modelScaleFactor;
+        SerializedProperty normalizedBoundsSize;
         SerializedProperty flexScale;
         SerializedProperty blendshapeNames;
         SerializedProperty flexControlNames;
         SerializedProperty flexControllers;
-        SerializedProperty flexOps;
         SerializedProperty flexPresets;
+
         SerializedProperty qcFile;
         SerializedProperty qcPath;
         SerializedProperty vtaPath;
-        SerializedProperty weightsL, weightsR;
         SerializedProperty menuState;
+        SerializedProperty backupMeshPath;
+        SerializedProperty backupMeshName;
 
         SerializedProperty previewingMesh;
 
@@ -70,26 +80,29 @@ namespace TF2Ls.FaceFlex
         List<FlexPreset> referencePresets;
 
         FaceFlexTool script => target as FaceFlexTool;
+        SkinnedMeshRenderer rendererObj => renderer.objectReferenceValue as SkinnedMeshRenderer;
+
         AnimationWindow animWindow => EditorWindow.GetWindow<AnimationWindow>();
         GameObject gameObject => script.gameObject;
 
-        static string PresetPath => Path.Combine(TF2LsSettings.Settings.PackagePath, "Flex Tool", "Presets");
+        static string PresetPath => Path.Combine(TF2LsSettings.Settings.PackagePath, "Face Flex Tool", "Presets");
 
         private void OnEnable()
         {
             renderer = serializedObject.FindProperty(nameof(renderer));
+            modelScaleFactor = serializedObject.FindProperty(nameof(modelScaleFactor));
+            normalizedBoundsSize = serializedObject.FindProperty(nameof(normalizedBoundsSize));
             flexScale = serializedObject.FindProperty(nameof(flexScale));
             blendshapeNames = serializedObject.FindProperty(nameof(blendshapeNames));
             flexControlNames = serializedObject.FindProperty(nameof(flexControlNames));
             flexControllers = serializedObject.FindProperty(nameof(flexControllers));
-            flexOps = serializedObject.FindProperty(nameof(flexOps));
             flexPresets = serializedObject.FindProperty(nameof(flexPresets));
+
             qcFile = serializedObject.FindProperty(nameof(qcFile));
             qcPath = serializedObject.FindProperty(nameof(qcPath));
-            vtaPath = serializedObject.FindProperty(nameof(vtaPath));
-            weightsL = serializedObject.FindProperty(nameof(weightsL));
-            weightsR = serializedObject.FindProperty(nameof(weightsR));
             menuState = serializedObject.FindProperty(nameof(menuState));
+            backupMeshPath = serializedObject.FindProperty(nameof(backupMeshPath));
+            backupMeshName = serializedObject.FindProperty(nameof(backupMeshName));
 
             previewingMesh = serializedObject.FindProperty(nameof(previewingMesh));
 
@@ -113,8 +126,11 @@ namespace TF2Ls.FaceFlex
             else
             {
                 menuState.enumValueIndex = 0;
-                serializedObject.ApplyModifiedProperties();
             }
+
+            serializedObject.ApplyModifiedProperties();
+
+            CheckModelImporterSettings();
 
             ApplySearchFilter();
 
@@ -136,7 +152,7 @@ namespace TF2Ls.FaceFlex
         {
             if (obj == PlayModeStateChange.ExitingEditMode)
             {
-                script.UnloadEditorMesh();
+                UnloadEditorMesh();
             }
         }
 
@@ -155,11 +171,14 @@ namespace TF2Ls.FaceFlex
                 {
                     if (!previewingMesh.boolValue && qcFileObject != null)
                     {
-                        if (EditorUtility.DisplayDialog("Entered Animation Mode", "You just " +
-                            "entered Animation mode, do you want to enable Face Flex previews?",
-                            "Yes", "No"))
+                        if (TF2LsSettings.Settings.EnableFlexesWhenAnimating)
                         {
-                            script.CreateMeshInstanceInEditor();
+                            if (EditorUtility.DisplayDialog("Entered Animation Mode", "You just " +
+                                "entered Animation mode, do you want to enable Face Flex previews?",
+                                "Yes", "No"))
+                            {
+                                script.CreateMeshInstanceInEditor();
+                            }
                         }
                     }
 
@@ -178,7 +197,7 @@ namespace TF2Ls.FaceFlex
                 if (animTime != animWindow.time)
                 {
                     ApplyAnimationChanges();
-                    animTime = animWindow.time; 
+                    animTime = animWindow.time;
                 }
             }
             else
@@ -293,6 +312,7 @@ namespace TF2Ls.FaceFlex
                 EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
 
             RenderWarnings();
+            RenderModelImporterWarnings();
 
             EditorGUILayout.Space();
 
@@ -301,7 +321,7 @@ namespace TF2Ls.FaceFlex
             EditorGUILayout.LabelField("Setup Status", EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter));
 
             var style = EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.MiddleCenter);
-            if (renderer.objectReferenceValue && qcFileObject != null)
+            if (renderer.objectReferenceValue && qcFileObject != null && normalizedBoundsSize.vector3Value != Vector3.zero)
             {
                 EditorGUILayout.LabelField("Finished!", style.SetTextColor(TF2Colors.BUFF));
             }
@@ -331,12 +351,10 @@ namespace TF2Ls.FaceFlex
                 qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
             }
 
-            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || !qcPathAsset || string.IsNullOrEmpty(qcPath.stringValue));
+            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || string.IsNullOrEmpty(qcPath.stringValue));
             if (GUILayout.Button("Generate Helper Component from .qc File"))
             {
-                ApplyMeshImportSettings();
-                ParseQCFile();
-                GenerateFile();
+                GenerateHelperComponent();
             }
             EditorGUI.EndDisabledGroup();
 
@@ -356,6 +374,7 @@ namespace TF2Ls.FaceFlex
                 EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
 
             RenderWarnings();
+            RenderModelImporterWarnings();
 
             EditorGUILayout.Space();
 
@@ -386,11 +405,12 @@ namespace TF2Ls.FaceFlex
             {
                 if (previewingMesh.boolValue)
                 {
-                    script.UnloadEditorMesh();
+                    UnloadEditorMesh();
                 }
                 else
                 {
                     script.CreateMeshInstanceInEditor();
+                    script.UpdateBlendShapes();
                 }
             }
             EditorGUI.EndDisabledGroup();
@@ -429,7 +449,13 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.Space();
 
+            EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(flexScale);
+            if (EditorGUI.EndChangeCheck())
+            {
+                script.UpdateBlendShapes();
+            }
+
             EditorGUILayout.LabelField(
                 "Higher values distort the face in horrible ways. Keep between 1 and 2 for " +
                 "best results. Leave it at 1 if you're not sure!",
@@ -462,7 +488,7 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.Space();
 
-            if (ControllerVisibility != ControllerShowState.Hidden)
+            if (ControllerVisibility != ControllerShowState.Hidden && previewingMesh.boolValue)
             {
                 EditorGUI.BeginChangeCheck();
                 searchFilter = EditorGUILayout.TextField("Quick Filter", searchFilter);
@@ -505,6 +531,24 @@ namespace TF2Ls.FaceFlex
             }
         }
 
+        public void UnloadEditorMesh()
+        {
+            if (!previewingMesh.boolValue) return;
+
+            previewingMesh.boolValue = false;
+
+            DestroyImmediate(script.Mesh);
+
+            rendererObj.sharedMesh = script.backupMesh;
+
+            if (rendererObj.gameObject.TryGetComponent(out SMRLocker locker))
+            {
+                DestroyImmediate(locker);
+            }
+
+            script.backupMesh = null;
+        }
+
         void LoadReferencePresets()
         {
             referencePresets = EditorHelper.ImportAssetsAtPath<FlexPreset>(PresetPath);
@@ -545,6 +589,11 @@ namespace TF2Ls.FaceFlex
             LoadFaceFromPreset(preset);
 
             LastFolder = path;
+
+            if (Event.current != null)
+            {
+                GUIUtility.ExitGUI();
+            }
         }
 
         void LoadFaceFromPreset(object input)
@@ -559,8 +608,9 @@ namespace TF2Ls.FaceFlex
                 flexControllerProps[preset.flexControllerNames[i]].Value.floatValue = preset.values[i];
             }
 
-            if (qcFileObject.ApplyModifiedProperties()) script.UpdateBlendShapes();
+            qcFileObject.ApplyModifiedProperties();
             serializedObject.ApplyModifiedProperties();
+            script.UpdateBlendShapes();
         }
 
         void ApplySearchFilter()
@@ -583,27 +633,110 @@ namespace TF2Ls.FaceFlex
             }
         }
 
-        const float MaxX = 3.5f;
-        const float SmoothedX = 0.5f;
-        const float Diff = 0.001f;
-
-        void ApplyMeshImportSettings()
+        void GenerateHelperComponent()
         {
-            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
-            ModelImporter modelImporter = importer as ModelImporter;
-            modelImporter.isReadable = true;
-            modelImporter.SaveAndReimport();
+            var path = EditorUtility.SaveFilePanelInProject("Save helper component to", script.Mesh.name, "cs", LastFolder);
+
+            if (string.IsNullOrEmpty(path)) return;
+
+            CalculateNormalizedBounds();
+            ParseQCFile();
+            GenerateFile(path);
         }
 
-        void RevertMeshChanges()
+        void CheckModelImporterSettings()
         {
-            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
+            Mesh m;
+            if (previewingMesh.boolValue) m = script.backupMesh;
+            else m = script.Mesh;
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(m));
             ModelImporter modelImporter = importer as ModelImporter;
+
+            if (!modelImporter.isReadable) miwReadable = true;
+            if (!modelImporter.importBlendShapes) miwImportBlendshapes = true;
+            if (modelImporter.importNormals != ModelImporterNormals.Calculate) miwImportNormal = true;
+        }
+
+        // miw stands for "Model Import Warning"
+        bool miwReadable;
+        bool miwImportBlendshapes;
+        bool miwImportNormal;
+        void RenderModelImporterWarnings()
+        {
+            bool foundIssue = false;
+
+            if (miwImportBlendshapes)
+            {
+                EditorGUILayout.HelpBox("Your mesh has Read/Write set to false! Face Flex Tool needs " +
+                    "it set to True to modify your Blendshapes."
+                , MessageType.Warning);
+                foundIssue = true;
+            }
+
+            if (miwReadable)
+            {
+                EditorGUILayout.HelpBox("Your mesh has Import Blendshapes set to false! Unity needs to " +
+                    "import your Blendshapes so you this tool has something to manipulate."
+                , MessageType.Warning);
+                foundIssue = true;
+            }
+
+            if (miwImportNormal)
+            {
+                EditorGUILayout.HelpBox("Your mesh is currently importing its Normals. You are " +
+                    "recommended to calculate your Normals instead, otherwise your mesh geometry will " +
+                    "look weird when you modify your Blendshapes."
+                , MessageType.Warning);
+                foundIssue = true;
+            }
+
+            if (foundIssue)
+            {
+                EditorGUILayout.BeginHorizontal();
+
+                EditorGUILayout.Space();
+                if (GUILayout.Button("Fix All Issues", GUILayout.ExpandWidth(false)))
+                {
+                    ApplyModelImporterFixes();
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        void ApplyModelImporterFixes()
+        {
+            Mesh m;
+            if (previewingMesh.boolValue) m = script.backupMesh;
+            else m = script.Mesh;
+
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(m));
+            ModelImporter modelImporter = importer as ModelImporter;
+
+            modelImporter.isReadable = true;
             modelImporter.importNormals = ModelImporterNormals.Calculate;
             modelImporter.importBlendShapes = true;
-            modelImporter.importBlendShapeNormals = ModelImporterNormals.Calculate;
-            modelImporter.globalScale = 100;
+
             modelImporter.SaveAndReimport();
+
+            miwReadable = false;
+            miwImportBlendshapes = false;
+            miwImportNormal = false;
+        }
+
+        void CalculateNormalizedBounds()
+        {
+            if (normalizedBoundsSize.vector3Value == Vector3.zero)
+            {
+                var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(script.Mesh));
+                ModelImporter modelImporter = importer as ModelImporter;
+
+                var boundsSize = script.Mesh.bounds.size;
+                normalizedBoundsSize.vector3Value = new Vector3(
+                    boundsSize.x / modelImporter.globalScale,
+                    boundsSize.y / modelImporter.globalScale,
+                    boundsSize.z / modelImporter.globalScale
+                    );
+            }
         }
 
         void ParseQCFile()
@@ -639,106 +772,23 @@ namespace TF2Ls.FaceFlex
             }
         }
 
-        #region .pre file logic
-        void ImportDMEPresets()
+        void GenerateFile(string path)
         {
-            var path = @"I:\My Drive\Modelling\TF2 Mods\Sniper\sniper_emotion.pre";
-            var preFile = File.ReadAllLines(path);
-
-            flexPresets.ClearArray();
-
-            for (int i = 0; i < preFile.Length; i++)
-            {
-                if (preFile[i].Contains("DmePreset"))
-                {
-                    var newPreset = new FacePreset();
-                    newPreset.FlexNames = new List<string>();
-                    newPreset.FlexValues = new List<float>();
-                    newPreset.FlexBalances = new List<float>();
-                    newPreset.FlexMultiLevels = new List<float>();
-                    while (!preFile[i].Contains("]"))
-                    {
-                        i++;
-                        var splits = preFile[i].TrimStart().Split(' ');
-                        if (splits[0].Contains("name"))
-                        {
-                            newPreset.Name = splits[2].Trim('"');
-                        }
-                        else if (splits[0].Contains("DmElement"))
-                        {
-                            newPreset.FlexNames.Add("");
-                            newPreset.FlexValues.Add(-1);
-                            newPreset.FlexBalances.Add(-1);
-                            newPreset.FlexMultiLevels.Add(-1);
-                            // Bad recursion, but it's only two layers so whatever
-                            while (!preFile[i].Contains("}"))
-                            {
-                                i++;
-                                var s = preFile[i].TrimStart().Split(' ');
-                                if (s[0].Contains("name"))
-                                {
-                                    newPreset.FlexNames[i] = s[2].Trim('"');
-                                }
-                                else if (s[0].Contains("value"))
-                                {
-                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
-                                }
-                                else if (s[0].Contains("balance"))
-                                {
-                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
-                                }
-                                else if (s[0].Contains("multilevel"))
-                                {
-                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
-                                }
-                            }
-                        }
-                    }
-                    flexPresets.AddAndReturnNewArrayElement().managedReferenceValue = newPreset;
-                }
-            }
-        }
-
-        int selectedOption;
-        void ApplyPreset()
-        {
-            var selectedPreset = flexPresets.GetArrayElementAtIndex(selectedOption);
-            var names = selectedPreset.FindPropertyRelative("FlexNames");
-            var values = selectedPreset.FindPropertyRelative("FlexValues");
-            var balances = selectedPreset.FindPropertyRelative("FlexBalances");
-            var multiLevels = selectedPreset.FindPropertyRelative("FlexMultiLevels");
-            for (int i = 0; i < names.arraySize; i++)
-            {
-                var name = names.GetArrayElementAtIndex(i).stringValue;
-                var value = values.GetArrayElementAtIndex(i).floatValue;
-                var balance = balances.GetArrayElementAtIndex(i).floatValue;
-                var multiLevel = multiLevels.GetArrayElementAtIndex(i).floatValue;
-                if (balance > -1) // How is this calculated?
-                {
-                }
-                //flexControllerProps[name].Value.floatValue = 
-            }
-        }
-        #endregion
-
-        string scriptPath;
-        void GenerateFile()
-        {
-            string className = qcPath.stringValue.Substring(qcPath.stringValue.LastIndexOf('/') + 1);
-            className = className.Remove(className.IndexOf('.')) + "QC";
+            string className = path.Substring(path.LastIndexOf('/') + 1);
+            className = className.Remove(className.IndexOf('.'));
             var c = className.ToCharArray();
             c[0] = char.ToUpper(c[0]);
-            className = new string(c);
+            className = new string(c).ConvertToAlphanumeric();
 
             string fileName = className + ".cs";
+            path = path.Substring(0, path.LastIndexOf('/')) + "/" + fileName;
 
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Generating code...", 0.15f);
 
             var qcPathFull = Path.Combine(System.Environment.CurrentDirectory, qcPath.stringValue);
-            scriptPath = Path.Combine(Application.dataPath, fileName);
 
-            File.WriteAllText(scriptPath, string.Empty);
-            StreamWriter writer = new StreamWriter(scriptPath, true);
+            File.WriteAllText(path, string.Empty);
+            StreamWriter writer = new StreamWriter(path, true);
 
             writer.Write("/**" +
                 "\n* File generated by TF2Ls" +
@@ -825,7 +875,7 @@ namespace TF2Ls.FaceFlex
             writer.WriteLine("\n" + bigIndent + "// Blend Shape Props");
             for (int i = 0; i < this.script.Mesh.blendShapeCount; i++)
             {
-                writer.WriteLine(bigIndent + "float " + this.script.Mesh.GetBlendShapeName(i) + 
+                writer.WriteLine(bigIndent + "float " + this.script.Mesh.GetBlendShapeName(i) +
                     " { set { renderer.SetBlendShapeWeight(" + i + ", value * FlexScale); } }");
             }
 
@@ -842,12 +892,12 @@ namespace TF2Ls.FaceFlex
 
             writer.Close();
 
-            script.UnloadEditorMesh();
+            UnloadEditorMesh();
 
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Importing and compiling...", 0.9f);
-            scriptPath = EditorHelper.GetProjectRelativePath(scriptPath);
 
-            TFToolsAssPP.OnMonoScriptImported += AddHelperComponent;
+            ScriptPath = path;
+            LastFolder = path;
 
             EditorApplication.update += ImportScript;
 
@@ -860,164 +910,106 @@ namespace TF2Ls.FaceFlex
         {
             EditorApplication.update -= ImportScript;
             //Re-import the file to update the reference in the editor
-            AssetDatabase.ImportAsset(scriptPath);
+            AssetDatabase.ImportAsset(ScriptPath);
         }
 
-        private void AddHelperComponent(MonoScript obj)
+        [UnityEditor.Callbacks.DidReloadScripts]
+        private static void OnScriptsReloaded()
         {
-            if (obj == null) return;
-            TFToolsAssPP.OnMonoScriptImported -= AddHelperComponent;
-            if (!script.gameObject.GetComponent(obj.GetClass()))
+            if (string.IsNullOrEmpty(ScriptPath)) return;
+
+            var gameObject = Selection.activeGameObject;
+            var monoScript = AssetDatabase.LoadAssetAtPath<MonoScript>(ScriptPath);
+
+            ScriptPath = "";
+
+            if (!gameObject.GetComponent(monoScript.GetClass()))
             {
-                script.gameObject.AddComponent(obj.GetClass());
+                var ms = gameObject.AddComponent(monoScript.GetClass());
+                var so = new SerializedObject(gameObject.GetComponent<FaceFlexTool>());
+                so.FindProperty("qcFile").objectReferenceValue = ms;
+                so.ApplyModifiedProperties();
             }
         }
 
-        #region Deprecated
-        void GenerateBlendShapes()
+        #region .pre file logic
+        void ImportDMEPresets()
         {
-            var v = script.Mesh.vertices;
+            var path = @"I:\My Drive\Modelling\TF2 Mods\Sniper\sniper_emotion.pre";
+            var preFile = File.ReadAllLines(path);
 
-            script.Mesh.ClearBlendShapes();
+            flexPresets.ClearArray();
 
-            var weightsL = new float[v.Length];
-            var weightsR = new float[v.Length];
-            int i;
-            for (i = 0; i < v.Length; i++)
+            for (int i = 0; i < preFile.Length; i++)
             {
-                if (Mathf.Abs(v[i].x) < MaxX)
+                if (preFile[i].Contains("DmePreset"))
                 {
-                    if (v[i].x < 0)
+                    var newPreset = new FacePreset();
+                    newPreset.FlexNames = new List<string>();
+                    newPreset.FlexValues = new List<float>();
+                    newPreset.FlexBalances = new List<float>();
+                    newPreset.FlexMultiLevels = new List<float>();
+                    while (!preFile[i].Contains("]"))
                     {
-                        weightsL[i] = Mathf.Lerp(1, 0.5f, Mathf.InverseLerp(-SmoothedX, 0, v[i].x));
-                        weightsR[i] = Mathf.Lerp(0, 0.5f, Mathf.InverseLerp(-SmoothedX, 0, v[i].x));
+                        i++;
+                        var splits = preFile[i].TrimStart().Split(' ');
+                        if (splits[0].Contains("name"))
+                        {
+                            newPreset.Name = splits[2].Trim('"');
+                        }
+                        else if (splits[0].Contains("DmElement"))
+                        {
+                            newPreset.FlexNames.Add("");
+                            newPreset.FlexValues.Add(-1);
+                            newPreset.FlexBalances.Add(-1);
+                            newPreset.FlexMultiLevels.Add(-1);
+                            // Bad recursion, but it's only two layers so whatever
+                            while (!preFile[i].Contains("}"))
+                            {
+                                i++;
+                                var s = preFile[i].TrimStart().Split(' ');
+                                if (s[0].Contains("name"))
+                                {
+                                    newPreset.FlexNames[i] = s[2].Trim('"');
+                                }
+                                else if (s[0].Contains("value"))
+                                {
+                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
+                                }
+                                else if (s[0].Contains("balance"))
+                                {
+                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
+                                }
+                                else if (s[0].Contains("multilevel"))
+                                {
+                                    newPreset.FlexValues[i] = float.Parse(s[2].Trim('"'));
+                                }
+                            }
+                        }
                     }
-                    else
-                    {
-                        weightsL[i] = Mathf.Lerp(0.5f, 0, Mathf.InverseLerp(0, SmoothedX, v[i].x));
-                        weightsR[i] = Mathf.Lerp(0.5f, 1, Mathf.InverseLerp(0, SmoothedX, v[i].x));
-                    }
+                    flexPresets.AddAndReturnNewArrayElement().managedReferenceValue = newPreset;
                 }
             }
+        }
 
-            List<int> vtaToMeshVerts = new List<int>();
-            var vta = File.ReadAllLines(vtaPath.stringValue);
-
-            for (i = 0; i < vta.Length; i++) // Do nothing until we get to shape key data
+        int selectedOption;
+        void ApplyPreset()
+        {
+            var selectedPreset = flexPresets.GetArrayElementAtIndex(selectedOption);
+            var names = selectedPreset.FindPropertyRelative("FlexNames");
+            var values = selectedPreset.FindPropertyRelative("FlexValues");
+            var balances = selectedPreset.FindPropertyRelative("FlexBalances");
+            var multiLevels = selectedPreset.FindPropertyRelative("FlexMultiLevels");
+            for (int i = 0; i < names.arraySize; i++)
             {
-                if (vta[i].TrimStart() == "vertexanimation")
+                var name = names.GetArrayElementAtIndex(i).stringValue;
+                var value = values.GetArrayElementAtIndex(i).floatValue;
+                var balance = balances.GetArrayElementAtIndex(i).floatValue;
+                var multiLevel = multiLevels.GetArrayElementAtIndex(i).floatValue;
+                if (balance > -1) // How is this calculated?
                 {
-                    break;
                 }
-            }
-
-            bool readingVertex = false;
-            bool settingUpBasis = false;
-            string shapeKeyName = "";
-            var shapeKeyDeltas = new Vector3[v.Length];
-            var shapeKeyNormals = new Vector3[v.Length];
-            bool hasLeftRight;
-            for (; i < vta.Length; i++)
-            {
-                vta[i] = vta[i].TrimStart();
-                var splits = vta[i].Split(' ');
-
-                if (splits[0] == "time" || splits[0] == "end")
-                {
-                    readingVertex = true;
-                    if (splits[0] == "time")
-                    {
-                        settingUpBasis = splits[1] == "0";
-                    }
-                    else settingUpBasis = false;
-
-                    if (!settingUpBasis)
-                    {
-                        if (shapeKeyName != "") // Start evaluating last shape key data
-                        {
-                            hasLeftRight = shapeKeyName.IndexOf('+') > -1;
-
-                            if (!hasLeftRight)
-                            {
-                                script.Mesh.AddBlendShapeFrame(shapeKeyName, 1, shapeKeyDeltas, shapeKeyNormals, new Vector3[v.Length]);
-                            }
-                            else
-                            {
-                                var nameSplits = shapeKeyName.Split('+');
-                                var leftDeltas = new Vector3[v.Length];
-                                for (int j = 0; j < leftDeltas.Length; j++)
-                                {
-                                    leftDeltas[j] = shapeKeyDeltas[j] * weightsL[j];
-                                }
-                                script.Mesh.AddBlendShapeFrame(nameSplits[0], 1, leftDeltas, shapeKeyNormals, new Vector3[v.Length]);
-
-                                var rightDeltas = new Vector3[v.Length];
-                                for (int j = 0; j < leftDeltas.Length; j++)
-                                {
-                                    rightDeltas[j] = shapeKeyDeltas[j] * weightsR[j];
-                                }
-                                script.Mesh.AddBlendShapeFrame(nameSplits[1], 1, rightDeltas, shapeKeyNormals, new Vector3[v.Length]);
-                            }
-                        }
-
-                        if (splits.Length > 2)
-                        {
-                            shapeKeyName = splits[3];
-                            shapeKeyDeltas = new Vector3[v.Length];
-                            shapeKeyNormals = new Vector3[v.Length];
-                        }
-                    }
-                    continue;
-                }
-
-                if (readingVertex)
-                {
-                    if (settingUpBasis)
-                    {
-                        var vertex = new Vector3(
-                            float.Parse(splits[1]), float.Parse(splits[2]), float.Parse(splits[3]));
-                        var adjustedV = new Vector3(-vertex.x, -vertex.z, vertex.y);
-                        //var adjustedV = new Vector3(vertex.x, -vertex.z, vertex.y);
-
-                        var normal = new Vector3(
-                            float.Parse(splits[4]), float.Parse(splits[5]), float.Parse(splits[6]));
-                        var adjustedN = new Vector3(-normal.x, -normal.z, normal.y);
-                        //var adjustedN = new Vector3(normal.x, -normal.z, normal.z);
-
-                        bool found = false;
-                        for (int j = 0; j < v.Length; j++)
-                        {
-                            if (v[j].Approximately(adjustedV, Diff)/* && n[j].Approximately(adjustedN, Diff)*/)
-                            {
-                                vtaToMeshVerts.Add(j);
-                                found = true;
-                                break;
-                            }
-                        }
-
-                        if (!found)
-                        {
-                            vtaToMeshVerts.Add(-1); // Pad it out
-                        }
-                    }
-                    else
-                    {
-                        int index = int.Parse(splits[0]);
-                        index = vtaToMeshVerts[index];
-                        if (index >= v.Length || index == -1) continue;
-                        var og = new Vector3(
-                            float.Parse(splits[1]), float.Parse(splits[2]), float.Parse(splits[3]));
-
-                        var normal = new Vector3(
-                            float.Parse(splits[4]), float.Parse(splits[5]), float.Parse(splits[6]));
-
-                        //shapeKeyDeltas[index] = new Vector3(og.x, -og.z, og.y);
-                        shapeKeyDeltas[index] = new Vector3(-og.x, -og.z, og.y);
-                        shapeKeyDeltas[index] = shapeKeyDeltas[index] - v[index];
-                        //shapeKeyNormals[index] = new Vector3(normal.x, -normal.z, normal.y);
-                        shapeKeyNormals[index] = new Vector3(-normal.x, -normal.z, normal.y);
-                    }
-                }
+                //flexControllerProps[name].Value.floatValue = 
             }
         }
         #endregion

@@ -218,7 +218,7 @@ namespace TF2Ls
             }
             else
             {
-                SerializedObject.Update();
+                SerializedObject.UpdateIfRequiredOrScript();
 
                 if (!TF2LsSettings.Settings.TFInstallExists)
                 {
@@ -257,8 +257,8 @@ namespace TF2Ls
                 RenderHLExtractTools();
                 if (Event.current.type == EventType.Used)
                 {
-                    if (SerializedObject.hasModifiedProperties) SerializedObject.ApplyModifiedProperties();
-                    return;
+                    SerializedObject.ApplyModifiedProperties();
+                    GUIUtility.ExitGUI();
                 }
                 EditorGUILayout.EndVertical();
 
@@ -279,7 +279,7 @@ namespace TF2Ls
                 EditorGUILayout.Space();
                 EditorGUILayout.EndVertical();
 
-                if (SerializedObject.hasModifiedProperties) SerializedObject.ApplyModifiedProperties();
+                SerializedObject.ApplyModifiedProperties();
             }
 
             EditorGUILayout.EndScrollView();

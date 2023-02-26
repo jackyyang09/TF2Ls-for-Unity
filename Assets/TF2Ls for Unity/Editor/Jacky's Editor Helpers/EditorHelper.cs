@@ -287,6 +287,23 @@ namespace JackysEditorHelpers
             return new List<T>();
         }
 
+        public static List<T> ImportSubAssetsAtPath<T>(string filePath) where T : Object
+        {
+            var assets = AssetDatabase.LoadAllAssetsAtPath(filePath);
+
+            var loadedAssets = new List<T>();
+            for (int i = 0; i < assets.Length; i++)
+            {
+                var a = assets[i] as T;
+                if (a) // Was cast successful?
+                {
+                    loadedAssets.Add(a);
+                }
+            }
+
+            return loadedAssets;
+        }
+
         public static bool IsDragging(Rect dragRect) => dragRect.Contains(Event.current.mousePosition) && DragAndDrop.objectReferences.Length > 0;
 
         const int DAD_FONTSIZE = 40;
@@ -412,6 +429,47 @@ namespace JackysEditorHelpers
                 b = Mathf.Clamp01(thisColor.b - otherColor.g),
                 a = Mathf.Clamp01(thisColor.a - otherColor.a)
             };
+        }
+
+        /// <summary>
+        /// Helpful method by Stack Overflow user ata
+        /// https://stackoverflow.com/questions/3210393/how-do-i-remove-all-non-alphanumeric-characters-from-a-string-except-dash
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        public static string ConvertToAlphanumeric(this string input)
+        {
+            char[] arr = input.ToCharArray();
+
+            arr = System.Array.FindAll(arr, c => char.IsLetterOrDigit(c));
+
+            if (arr.Length > 0)
+            {
+                // If the first index is a number
+                while (char.IsDigit(arr[0]) || arr[0] == '.')
+                {
+                    List<char> newArray = new List<char>();
+                    newArray = new List<char>(arr);
+                    newArray.RemoveAt(0);
+                    arr = newArray.ToArray();
+                    if (arr.Length == 0) break; // No valid characters to use, returning empty
+                }
+
+                if (arr.Length != 0)
+                {
+                    // If the last index is a period
+                    while (arr[arr.Length - 1] == '.')
+                    {
+                        List<char> newArray = new List<char>();
+                        newArray = new List<char>(arr);
+                        newArray.RemoveAt(newArray.Count - 1);
+                        arr = newArray.ToArray();
+                        if (arr.Length == 0) break; // No valid characters to use, returning empty
+                    }
+                }
+            }
+
+            return new string(arr);
         }
     }
 

@@ -9,6 +9,11 @@ namespace TF2Ls
 {
     public class TF2LsSettings : ScriptableObject
     {
+        [Tooltip("If true, Face Flex tool will prompt you to enable Face Flex previews when " +
+            "previewing Animations in the Editor")]
+        [SerializeField] bool enableFlexesWhenAnimating;
+        public bool EnableFlexesWhenAnimating => enableFlexesWhenAnimating;
+
         [SerializeField] string packagePath;
         public string PackagePath
         {
@@ -27,7 +32,7 @@ namespace TF2Ls
         {
             var guids = AssetDatabase.FindAssets("t:" + nameof(TF2LsSettings).ToLower());
             var path = AssetDatabase.GUIDToAssetPath(guids[0]);
-            packagePath = path.Remove(path.IndexOf("/Editor/TF2LsSettings.asset"));
+            packagePath = path.Remove(path.IndexOf("/Settings/Editor/TF2LsSettings.asset"));
         }
 
         public static string ResourcesPath => "Assets/Resources/TF2Ls Generated";
@@ -99,7 +104,8 @@ namespace TF2Ls
             {
                 if (serializedObject == null)
                 {
-                    return new SerializedObject(Settings);
+                    serializedObject = new SerializedObject(Settings);
+                    return serializedObject;
                 }
                 return serializedObject;
             }
@@ -136,11 +142,17 @@ namespace TF2Ls
                     EditorGUIUtility.labelWidth += 50;
 
                     var settings = TF2LsSettings.SerializedObject;
+                    SerializedProperty enableFlexesWhenAnimating = settings.FindProperty(nameof(enableFlexesWhenAnimating));
                     SerializedProperty helpTextSize = settings.FindProperty(nameof(helpTextSize));
                     SerializedProperty hlExtractExe = settings.FindProperty(nameof(hlExtractExe));
                     SerializedProperty vtfCmdExe = settings.FindProperty(nameof(vtfCmdExe));
                     SerializedProperty tfPath = settings.FindProperty(nameof(tfPath));
                     SerializedProperty unlockSystemObjects = settings.FindProperty(nameof(unlockSystemObjects));
+
+                    EditorGUILayout.LabelField("Face Flex Tool", EditorStyles.boldLabel);
+                    EditorGUILayout.PropertyField(enableFlexesWhenAnimating);
+
+                    EditorGUILayout.Space();
 
                     // Validate folder
                     EditorHelper.RenderSmartFolderProperty(new GUIContent("tf Path"), tfPath, false, "Select the tf folder within your TF2 installation path");

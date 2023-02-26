@@ -31,6 +31,9 @@ namespace TF2Ls.FaceFlex
 
     public class FaceFlexTool : MonoBehaviour
     {
+#pragma warning disable 0414 // Ignore value unused warnings
+#pragma warning disable 0649 // Ignore value unassigned warnings
+        [SerializeField] Vector3 normalizedBoundsSize;
         [SerializeField] new SkinnedMeshRenderer renderer;
         public SkinnedMeshRenderer Renderer => renderer;
 
@@ -44,7 +47,7 @@ namespace TF2Ls.FaceFlex
             var control = flexControllers[index];
             var range = control.Range;
             float value;
-            
+
             value = Mathf.LerpUnclamped(range.x, range.y, raw);
 
             return value;
@@ -55,7 +58,8 @@ namespace TF2Ls.FaceFlex
         [SerializeField] BaseQC qcFile;
 
         [SerializeField] [HideInInspector] string qcPath;
-
+#pragma warning restore 0649
+#pragma warning restore 0414
         public Mesh Mesh
         {
             get
@@ -64,6 +68,7 @@ namespace TF2Ls.FaceFlex
                 return m;
             }
         }
+
         public bool MeshBlendshapesConverted
         {
             get
@@ -85,11 +90,6 @@ namespace TF2Ls.FaceFlex
             }
         }
 
-        void TryConvertSelf()
-        {
-            SplitBlendshapes();
-        }
-
         private void Update()
         {
             UpdateBlendShapes();
@@ -104,7 +104,8 @@ namespace TF2Ls.FaceFlex
 #if UNITY_EDITOR
         [SerializeField] bool previewingMesh;
         [SerializeField] MenuState menuState = MenuState.Setup;
-        Mesh backupMesh;
+        [SerializeField] string backupMeshPath, backupMeshName;
+        [HideInInspector] public Mesh backupMesh;
 
         private void OnValidate()
         {
@@ -116,24 +117,52 @@ namespace TF2Ls.FaceFlex
 
             if (previewingMesh)
             {
-                if (backupMesh == null)
-                {
-                    CreateMeshInstanceInEditor();
-                }
-
-                UpdateBlendShapes();
+                EditorApplication.update += _OnValidate;
             }
-            else if (!MeshBlendshapesConverted) return;
         }
 
         /// <summary>
-        /// This is what we call, a "Pro Gamer Move"
+        /// Roundabout way of dodging SendMessage warning
+        /// https://forum.unity.com/threads/sendmessage-cannot-be-called-during-awake-checkconsistency-or-onvalidate-can-we-suppress.537265/
         /// </summary>
-        [ContextMenu(nameof(CreateMeshInstanceInEditor))]
+        private void _OnValidate()
+        {
+            EditorApplication.update -= _OnValidate;
+
+            if (Mesh == null)
+            {
+                LoadMeshFromBackup();
+            }
+
+            if (previewingMesh)
+            {
+                if (MeshBlendshapesConverted) return;
+                CreateMeshInstanceInEditor();
+                UpdateBlendShapes();
+            }
+        }
+
+        public void LoadMeshFromBackup()
+        {
+            if (Mesh == null)
+            {
+                var assets = AssetDatabase.LoadAllAssetsAtPath(backupMeshPath);
+                for (int i = 0; i < assets.Length; i++)
+                {
+                    if (assets[i].name != backupMeshName) continue;
+                    var meshAsset = assets[i] as Mesh;
+                    if (meshAsset)
+                    {
+                        backupMesh = meshAsset;
+
+                        renderer.sharedMesh = meshAsset;
+                    }
+                }
+            }
+        }
+
         public bool CreateMeshInstanceInEditor()
         {
-            if (renderer.sharedMesh == null) return false;
-
             SplitBlendshapes();
 
             var locker = renderer.gameObject.AddComponent<SMRLocker>();
@@ -143,29 +172,10 @@ namespace TF2Ls.FaceFlex
 
             return true;
         }
-
-        [ContextMenu(nameof(UnloadEditorMesh))]
-        public void UnloadEditorMesh()
-        {
-            if (!previewingMesh) return;
-
-            previewingMesh = false;
-
-            DestroyImmediate(renderer.sharedMesh);
-
-            renderer.sharedMesh = backupMesh;
-
-            if (renderer.gameObject.TryGetComponent(out SMRLocker locker))
-            {
-                DestroyImmediate(locker);
-            }
-
-            backupMesh = null;
-        }
 #endif
-
-        const float MaxX = 3.5f;
-        const float SmoothedX = 0.5f;
+        float ModelScaleFactor => Mesh.bounds.size.x / normalizedBoundsSize.x;
+        float MaxX => 0.035f * 3.5f * ModelScaleFactor;
+        float SmoothedX => 0.005f * ModelScaleFactor;
         const float Diff = 0.001f;
 
         public void SplitBlendshapes()
@@ -174,29 +184,49 @@ namespace TF2Ls.FaceFlex
             if (!renderer.sharedMesh) return;
 
 #if UNITY_EDITOR
-            bool tainted = AssetDatabase.GetAssetPath(renderer.sharedMesh).Equals("");
+            var assetPath = AssetDatabase.GetAssetPath(Mesh);
+            bool tainted = string.IsNullOrEmpty(assetPath);
             if (tainted) return;
 
-            previewingMesh = true;
+            EditorUtility.DisplayProgressBar("Face Flex Tool",
+                    "Generating Face Flexes for " + Mesh.name, 0);
+
+            var assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            for (int i = 0; i < assets.Length; i++)
+            {
+                var meshAsset = assets[i] as Mesh;
+                if (meshAsset) // Was cast successful?
+                {
+                    if (meshAsset == Mesh)
+                    {
+                        var so = new SerializedObject(this);
+                        so.FindProperty(nameof(backupMeshPath)).stringValue = assetPath;
+                        so.FindProperty(nameof(backupMeshName)).stringValue = Mesh.name;
+
+                        so.ApplyModifiedProperties();
+                    }
+                }
+            }
 
             backupMesh = renderer.sharedMesh;
 #endif
             Mesh meshClone = Instantiate(renderer.sharedMesh);
+            meshClone.name = renderer.sharedMesh.name;
             meshClone.hideFlags = HideFlags.HideAndDontSave;
 
             var v = meshClone.vertices;
 
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                EditorUtility.DisplayProgressBar("Face Flex Tool",
+                "Calculating left/right vertex weights", 0.25f);
+            }
+#endif
             var weightsL = new float[v.Length];
             var weightsR = new float[v.Length];
             for (int i = 0; i < v.Length; i++)
             {
-#if UNITY_EDITOR
-                if (!Application.isPlaying)
-                {
-                    EditorUtility.DisplayProgressBar("Face Flex Tool",
-                    "Calculating left/right vertex weights", (float)i / (float)v.Length);
-                }
-#endif
                 if (Mathf.Abs(v[i].x) < MaxX)
                 {
                     if (v[i].x < 0)
@@ -271,6 +301,9 @@ namespace TF2Ls.FaceFlex
 #if UNITY_EDITOR
             EditorUtility.ClearProgressBar();
 #endif
+            if (!previewingMesh) Undo.RecordObject(this, "Changed Mesh Preview State");
+            previewingMesh = true;
+
             renderer.sharedMesh = meshClone;
         }
     }
