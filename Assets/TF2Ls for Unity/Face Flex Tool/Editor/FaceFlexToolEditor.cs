@@ -21,8 +21,8 @@ namespace TF2Ls.FaceFlex
         static string PENDING_SCRIPT_KEY => nameof(FaceFlexToolEditor) + nameof(PENDING_SCRIPT_KEY);
         static string ScriptPath
         {
-            get => EditorPrefs.GetString(LAST_FOLDER_KEY);
-            set => EditorPrefs.SetString(LAST_FOLDER_KEY, value);
+            get => EditorPrefs.GetString(PENDING_SCRIPT_KEY);
+            set => EditorPrefs.SetString(PENDING_SCRIPT_KEY, value);
         }
 
         enum ControllerShowState
@@ -158,7 +158,10 @@ namespace TF2Ls.FaceFlex
 
         private void OnUndoRedoPerformed()
         {
-            script.UpdateBlendShapes();
+            if (previewingMesh.boolValue)
+            {
+                script.UpdateBlendShapes();
+            }
         }
 
         void Update()
@@ -332,36 +335,45 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.EndVertical();
 
-            EditorGUILayout.LabelField(ObjectNames.GetClassName(script) + " needs a reference to your " +
+            if (previewingMesh.boolValue)
+            {
+                EditorGUILayout.HelpBox("Setup is disabled while the Face Flex Tool is in Preview Mode. " +
+                    "Please Disable Preview Mode first if you wish to change your settings.", MessageType.Warning);
+            }
+
+            using (new EditorGUI.DisabledGroupScope(previewingMesh.boolValue))
+            {
+                EditorGUILayout.LabelField(ObjectNames.GetClassName(script) + " needs a reference to your " +
                 "model's SkinnedMeshRenderer component in order to change mesh data and allow Face Flex manipulation.",
                 TF2LsSettings.Settings.HelpTextStyle);
 
-            EditorGUILayout.PropertyField(renderer);
+                EditorGUILayout.PropertyField(renderer);
 
-            EditorGUILayout.Space();
+                EditorGUILayout.Space();
 
-            EditorGUILayout.LabelField("To properly convert your mesh's Blendshapes into flexes, " +
-                "add your mesh's .qc file to your project and get a reference to it in the field below.",
-                TF2LsSettings.Settings.HelpTextStyle);
+                EditorGUILayout.LabelField("To properly convert your mesh's Blendshapes into flexes, " +
+                    "add your mesh's .qc file to your project and get a reference to it in the field below.",
+                    TF2LsSettings.Settings.HelpTextStyle);
 
-            EditorGUI.BeginChangeCheck();
-            EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
-            if (EditorGUI.EndChangeCheck())
-            {
-                qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
+                EditorGUI.BeginChangeCheck();
+                EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
+                if (EditorGUI.EndChangeCheck())
+                {
+                    qcPathAsset = AssetDatabase.LoadAssetAtPath<DefaultAsset>(qcPath.stringValue);
+                }
+
+                EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || string.IsNullOrEmpty(qcPath.stringValue));
+                if (GUILayout.Button("Generate Helper Component from .qc File"))
+                {
+                    GenerateHelperComponent();
+                }
+                EditorGUI.EndDisabledGroup();
+
+                EditorGUILayout.Space();
+
+                EditorGUILayout.PropertyField(qcFile, new GUIContent(
+                    "QC Helper", ""));
             }
-
-            EditorGUI.BeginDisabledGroup(!renderer.objectReferenceValue || string.IsNullOrEmpty(qcPath.stringValue));
-            if (GUILayout.Button("Generate Helper Component from .qc File"))
-            {
-                GenerateHelperComponent();
-            }
-            EditorGUI.EndDisabledGroup();
-
-            EditorGUILayout.Space();
-
-            EditorGUILayout.PropertyField(qcFile, new GUIContent(
-                "QC Helper", ""));
         }
 
         void RenderFaceposerGUI()
@@ -531,15 +543,17 @@ namespace TF2Ls.FaceFlex
             }
         }
 
-        public void UnloadEditorMesh()
+        public void UnloadEditorMesh(bool forceUnload = false)
         {
-            if (!previewingMesh.boolValue) return;
+            if (!previewingMesh.boolValue && !forceUnload) return;
 
             previewingMesh.boolValue = false;
 
             DestroyImmediate(script.Mesh);
 
-            rendererObj.sharedMesh = script.backupMesh;
+            var so = new SerializedObject(rendererObj);
+            so.FindProperty("m_Mesh").objectReferenceValue = script.backupMesh;
+            so.ApplyModifiedProperties();
 
             if (rendererObj.gameObject.TryGetComponent(out SMRLocker locker))
             {
@@ -646,6 +660,8 @@ namespace TF2Ls.FaceFlex
 
         void CheckModelImporterSettings()
         {
+            if (rendererObj == null) return;
+            if (previewingMesh.boolValue) return;
             Mesh m;
             if (previewingMesh.boolValue) m = script.backupMesh;
             else m = script.Mesh;
@@ -664,8 +680,8 @@ namespace TF2Ls.FaceFlex
         void RenderModelImporterWarnings()
         {
             bool foundIssue = false;
-
-            if (miwImportBlendshapes)
+            
+            if (miwReadable)
             {
                 EditorGUILayout.HelpBox("Your mesh has Read/Write set to false! Face Flex Tool needs " +
                     "it set to True to modify your Blendshapes."
@@ -673,7 +689,7 @@ namespace TF2Ls.FaceFlex
                 foundIssue = true;
             }
 
-            if (miwReadable)
+            if (miwImportBlendshapes)
             {
                 EditorGUILayout.HelpBox("Your mesh has Import Blendshapes set to false! Unity needs to " +
                     "import your Blendshapes so you this tool has something to manipulate."
@@ -817,6 +833,7 @@ namespace TF2Ls.FaceFlex
                     qc[i] = qc[i].Substring(qc[i].IndexOf("flexcontroller ") + 15);
                     int quote = qc[i].IndexOf("\"") + 1;
                     var name = qc[i].Substring(quote, qc[i].Length - quote - 1);
+                    name = name[0].ToString().ToLower() + name.Substring(1);
                     qc[i] = qc[i].Substring(qc[i].IndexOf("range") + 6);
                     Vector2 range = new Vector2();
                     float.TryParse(qc[i].Substring(0, qc[i].IndexOf(' ')), out range.x);
@@ -847,6 +864,30 @@ namespace TF2Ls.FaceFlex
 
                         var line = qc[i];
 
+                        int startWordIndex = -1;
+
+                        var charArray = line.ToCharArray();
+                        for (int j = line.IndexOf('='); j < charArray.Length; j++)
+                        {
+                            if (char.IsLetter(line[j]))
+                            {
+                                if (startWordIndex == -1) startWordIndex = j;
+                            }
+                            else if (startWordIndex > -1)
+                            {
+                                if (line[j] == '_') continue;
+                                charArray[startWordIndex] = charArray[startWordIndex].ToString().ToLower()[0];
+                                startWordIndex = -1;
+                            }
+                        }
+
+                        if (startWordIndex > -1)
+                        {
+                            charArray[startWordIndex] = charArray[startWordIndex].ToString().ToLower()[0];
+                        }
+
+                        line = new string(charArray);
+
                         if (line.Contains("//")) // Exclude comments
                         {
                             line = line.Remove(line.IndexOf("//"));
@@ -876,7 +917,7 @@ namespace TF2Ls.FaceFlex
             for (int i = 0; i < this.script.Mesh.blendShapeCount; i++)
             {
                 writer.WriteLine(bigIndent + "float " + this.script.Mesh.GetBlendShapeName(i) +
-                    " { set { renderer.SetBlendShapeWeight(" + i + ", value * FlexScale); } }");
+                    " { set => renderer.SetBlendShapeWeight(" + i + ", value * FlexScale); get => renderer.GetBlendShapeWeight(" + i + "); }");
             }
 
             writer.WriteLine("\n" + bigIndent + "public override void UpdateBlendShapes()");
@@ -892,7 +933,7 @@ namespace TF2Ls.FaceFlex
 
             writer.Close();
 
-            UnloadEditorMesh();
+            UnloadEditorMesh(true);
 
             EditorUtility.DisplayProgressBar("Generating Helper Component", "Importing and compiling...", 0.9f);
 
