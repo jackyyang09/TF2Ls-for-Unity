@@ -30,17 +30,17 @@ namespace TF2Ls
             set { scrollX = value.x; scrollY = value.y; }
         }
 
-        string SCHEMA_PATH { get { return Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" }); } }
-        string EN_LOCALE_PATH { get { return Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "resource", "tf_english.txt" }); } }
+        string SCHEMA_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" });
+        string EN_LOCALE_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "resource", "tf_english.txt" });
 
         static List<ItemProperties> items = new List<ItemProperties>();
 
         static NodeReader itemsGame;
         static NodeReader tfEnglish;
 
-        static bool schemaLoaded = false;
+        static bool schemaLoaded => itemsGame != null;
 
-        //[MenuItem("Window/TF2Ls for Unity/Schema Test", false, 1)]
+        [MenuItem(AboutEditor.MENU_DIRECTORY + "Schema Test", false, 1)]
         public static void Init()
         {
             // Get existing open window or if none, make a new one:
@@ -51,7 +51,6 @@ namespace TF2Ls
 
         private void OnEnable()
         {
-            schemaLoaded = false;
         }
 
         protected override void SetWindowTitle()
@@ -65,8 +64,7 @@ namespace TF2Ls
             if (GUILayout.Button("Load Schema"))
             {
                 itemsGame = new NodeReader(File.ReadAllText(SCHEMA_PATH));
-                //tfEnglish = new NodeReader(File.ReadAllText(EN_LOCALE_PATH));
-                schemaLoaded = true;
+                tfEnglish = new NodeReader(File.ReadAllText(EN_LOCALE_PATH));
             }
 
             if (schemaLoaded)
@@ -75,22 +73,50 @@ namespace TF2Ls
                 {
                     RetrieveItems();
                 }
-                for (int i = 0; i < items.Count; i++)
+                int row = 0;
+                for (int i = 0; i < items.Count; i++, row++)
                 {
+                    if (row == 0) EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                    EditorGUILayout.LabelField(items[i].name);
+                    for (int j = 0; j < items[i].used_by_classes.Count; j++)
+                    {
+                        EditorGUILayout.LabelField(items[i].used_by_classes[j]);
+                    }
+                    EditorGUILayout.EndVertical();
+                    if (row == 3 || i == items.Count - 1)
+                    {
+                        EditorGUILayout.EndHorizontal();
+                        row = -1;
+                    }
                 }
                 RenderNode(itemsGame.rootNode);
-                //RenderNode(tfEnglish.rootNode);
+                RenderNode(tfEnglish.rootNode);
             }
             EditorGUILayout.EndScrollView();
         }
 
         void RetrieveItems()
         {
+            items = new List<ItemProperties>();
             Node itemNode = itemsGame.rootNode.Get("items");
             foreach (var node in itemNode.children)
             {
+                if (!node.childrenDictionary.ContainsKey("used_by_classes")) continue;
                 var newItem = new ItemProperties();
-                newItem.name = node.name;
+                string nameKey = node.childrenDictionary["name"].property;
+                if (node.childrenDictionary.ContainsKey("item_name"))
+                {
+                    nameKey = node.childrenDictionary["item_name"].property.Remove(0, 1);
+                    newItem.item_name = nameKey;
+                }
+                if (!tfEnglish.rootNode.children[1].childrenDictionary.ContainsKey(nameKey)) continue;
+                newItem.name = tfEnglish.rootNode.children[1].childrenDictionary[nameKey].property;
+                newItem.used_by_classes = new List<string>();
+                foreach (var c in node.childrenDictionary["used_by_classes"].children)
+                {
+                    newItem.used_by_classes.Add(c.name);
+                }
                 items.Add(newItem);
             }
         }

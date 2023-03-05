@@ -18,6 +18,7 @@ namespace TF2Ls
     public struct ItemProperties
     {
         public string name;
+        public string item_name;
         public string model_player;
         public string model_player_per_class;
         public string ModelPath
@@ -29,5 +30,6 @@ namespace TF2Ls
                 return model_player_per_class;
             }
         }
+        public List<string> used_by_classes;
     }
 }
