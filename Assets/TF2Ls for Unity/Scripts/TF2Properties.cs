@@ -15,7 +15,7 @@ namespace TF2Ls
     }
 
     [System.Serializable]
-    public struct ItemProperties
+    public class ItemData
     {
         public string name;
         public string item_name;
@@ -30,6 +30,22 @@ namespace TF2Ls
                 return model_player_per_class;
             }
         }
+
+        public string image_url;
+        public string image_url_large;
+        public Texture2D loadedImage;
         public List<string> used_by_classes;
+    }
+
+    [System.Serializable]
+    public class ItemPayload
+    {
+        public ItemData[] items;
+    }
+
+    [System.Serializable]
+    public class TF2APIResult
+    {
+        public ItemPayload result;
     }
 }

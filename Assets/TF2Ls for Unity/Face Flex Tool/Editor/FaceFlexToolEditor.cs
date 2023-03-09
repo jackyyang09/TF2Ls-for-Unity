@@ -11,14 +11,14 @@ namespace TF2Ls.FaceFlex
     [CustomEditor(typeof(FaceFlexTool))]
     public class FaceFlexToolEditor : Editor
     {
-        static string LAST_FOLDER_KEY => nameof(FaceFlexToolEditor) + nameof(LAST_FOLDER_KEY);
+        const string LAST_FOLDER_KEY = nameof(FaceFlexToolEditor) + nameof(LAST_FOLDER_KEY);
         static string LastFolder
         {
             get => EditorPrefs.GetString(LAST_FOLDER_KEY, "Assets");
             set => EditorPrefs.SetString(LAST_FOLDER_KEY, value);
         }
 
-        static string PENDING_SCRIPT_KEY => nameof(FaceFlexToolEditor) + nameof(PENDING_SCRIPT_KEY);
+        const string PENDING_SCRIPT_KEY = nameof(FaceFlexToolEditor) + nameof(PENDING_SCRIPT_KEY);
         static string ScriptPath
         {
             get => EditorPrefs.GetString(PENDING_SCRIPT_KEY);

@@ -2,6 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Because other VDF Parsers were too complicated for me :(
+/// </summary>
 namespace TF2Ls
 {
     public class Node
@@ -20,7 +23,7 @@ namespace TF2Ls
         public bool foldout;
     }
 
-    public class NodeReader
+    public class BasicVDFParser
     {
         public Node rootNode;
 
@@ -29,72 +32,95 @@ namespace TF2Ls
         /// </summary>
         public Vector2 lengthRange = new Vector2(0, int.MaxValue);
 
-        public NodeReader(string file)
+        public BasicVDFParser(string[] lines)
         {
             rootNode = new Node();
             Node currentNode = rootNode;
             Node newNode;
 
             string stringBuilder = string.Empty;
+            bool escapeKey = false;
             bool quoteOpened = false;
             bool nodeComplete = false;
-            for (int i = (int)lengthRange.x; i < (int)Mathf.Min(file.Length, lengthRange.y); i++)
+            for (int i = (int)lengthRange.x; i < (int)Mathf.Min(lines.Length, lengthRange.y); i++)
             {
-                switch (file[i])
+                for (int j = 0; j < lines[i].Length; j++)
                 {
-                    case '\"':
-                        if (quoteOpened)
-                        {
-                            if (nodeComplete)
+                    switch (lines[i][j])
+                    {
+                        // Descriptions abuse this
+                        case '\\':
+                            escapeKey = true;
+                            stringBuilder += lines[i][j];
+                            break;
+                        case '\"':
+                            if (quoteOpened)
                             {
-                                newNode = new Node();
-                                newNode.parent = currentNode.parent;
-                                currentNode.parent.children.Add(newNode);
-                                currentNode = newNode;
-                                nodeComplete = false;
-                            }
+                                if (escapeKey)
+                                {
+                                    stringBuilder += lines[i][j];
+                                    escapeKey = false;
+                                    break;
+                                }
 
-                            if (currentNode.name == string.Empty)
-                            {
-                                currentNode.name = stringBuilder;
+                                if (nodeComplete)
+                                {
+                                    newNode = new Node();
+                                    newNode.parent = currentNode.parent;
+                                    currentNode.parent.children.Add(newNode);
+                                    currentNode = newNode;
+                                    nodeComplete = false;
+                                }
+
+                                if (currentNode.name == string.Empty)
+                                {
+                                    currentNode.name = stringBuilder.ToLowerInvariant();
+                                }
+                                else
+                                {
+                                    currentNode.property = stringBuilder;
+                                    nodeComplete = true;
+                                }
                             }
                             else
                             {
-                                currentNode.property = stringBuilder;
-                                nodeComplete = true;
+                                stringBuilder = string.Empty;
                             }
-                        }
-                        else
-                        {
-                            stringBuilder = string.Empty;
-                        }
-                        quoteOpened = !quoteOpened;
-                        break;
-                    case '{':
-                        newNode = new Node();
-                        newNode.parent = currentNode;
-                        currentNode.children.Add(newNode);
-                        currentNode = newNode;
-                        break;
-                    case '}':
-                        currentNode = currentNode.parent;
-                        foreach (var node in currentNode.children)
-                        {
-                            if (!currentNode.childrenDictionary.ContainsKey(node.name))
-                                currentNode.childrenDictionary.Add(node.name, node);
-                        }
-                        break;
-                    default:
-                        if (quoteOpened)
-                        {
-                            // Is this a comment?
-                            if (file[i] == '/' && file[i + 1] == '/') i++;
+                            quoteOpened = !quoteOpened;
+                            break;
+                        case '{':
+                            newNode = new Node();
+                            newNode.parent = currentNode;
+                            currentNode.children.Add(newNode);
+                            currentNode = newNode;
+                            break;
+                        case '}':
+                            currentNode = currentNode.parent;
+                            foreach (var node in currentNode.children)
+                            {
+                                if (!currentNode.childrenDictionary.ContainsKey(node.name.ToLowerInvariant()))
+                                    currentNode.childrenDictionary.Add(node.name.ToLowerInvariant(), node);
+                            }
+                            break;
+                        default:
+                            if (quoteOpened)
+                            {
+                                if (escapeKey)
+                                {
+                                    escapeKey = false;
+                                }
+                                stringBuilder += lines[i][j];
+                            }
                             else
                             {
-                                stringBuilder += file[i];
+                                // Is this a comment?
+                                if (lines[i][j] == '/' && lines[i][j + 1] == '/')
+                                {
+                                    j = lines[i].Length;
+                                }
                             }
-                        }
-                        break;
+                            break;
+                    }
                 }
             }
         }

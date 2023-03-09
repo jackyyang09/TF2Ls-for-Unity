@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d2c872c4adcd1d46aec40d250513ead, type: 3}
   m_Name: TF2LsSettings
   m_EditorClassIdentifier: 
+  enableFlexesWhenAnimating: 0
   packagePath: Assets/TF2Ls for Unity
   helpTextSize: 12
   tfPath: D:/Steam Games/steamapps/common/Team Fortress 2/tf

@@ -110,6 +110,9 @@ namespace TF2Ls
 
         bool skipWarnings = false;
 
+        public static List<ItemData> Items = new List<ItemData>();
+        public static Dictionary<string, string> EnglishDictionary = new Dictionary<string, string>();
+
         [UnityEditor.Callbacks.OnOpenAsset]
         public static bool OnOpenAsset(int instanceID, int line)
         {
@@ -303,6 +306,10 @@ namespace TF2Ls
             {
                 if (showHelpText.boolValue) EditorGUILayout.LabelField("Sorry, weapon and cosmetic importing is " +
                     "currently not ready to use.", TF2LsSettings.Settings.HelpTextStyle);
+                if (GUILayout.Button("TEST"))
+                {
+                    ItemViewer.InitUtility();
+                }
                 return;
             }
 
