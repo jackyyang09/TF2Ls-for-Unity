@@ -2,9 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Because other VDF Parsers were too complicated for me :(
-/// </summary>
 namespace TF2Ls
 {
     public class Node

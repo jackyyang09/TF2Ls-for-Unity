@@ -1,10 +1,9 @@
-using System.IO;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEditor;
-using JackysEditorHelpers;
 using Ibasa.Valve.Vmt;
+using JackysEditorHelpers;
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
 
 namespace TF2Ls
 {
@@ -16,7 +15,7 @@ namespace TF2Ls
             EditorGUILayout.LabelField(
                 "You can also open up the Model Texturer by mousing over the top Toolbar and " +
                 "navigating to Tools -> TF2Ls for Unity -> Model Texturer"
-                , TF2LsSettings.Settings.HelpTextStyle);
+                , TF2LsStyles.HelpTextStyle);
 
             if (GUILayout.Button("Open Model Texturer"))
             {
@@ -111,7 +110,15 @@ namespace TF2Ls
         bool skipWarnings = false;
 
         public static List<ItemData> Items = new List<ItemData>();
+        public static ItemData ActiveItem;
         public static Dictionary<string, string> EnglishDictionary = new Dictionary<string, string>();
+        static string PLACEHOLDER_GRAPHIC_PATH => 
+            Path.Combine(TF2LsSettings.Settings.PackagePath, "ModelTexturer", "outback-hat.png");
+        public static Texture2D PlaceHolderGraphic;
+
+        public const string VMT_VPK_FILENAME = "tf2_misc_dir.vpk";
+        public const string VTF_VPK_FILENAME = "tf2_textures_dir.vpk";
+        List<string> vmtsToImport = new List<string>();
 
         [UnityEditor.Callbacks.OnOpenAsset]
         public static bool OnOpenAsset(int instanceID, int line)
@@ -144,6 +151,9 @@ namespace TF2Ls
         protected override void OnEnable()
         {
             if (SerializedObject != null) DesignateSerializedProperties();
+
+            PlaceHolderGraphic = AssetDatabase.LoadAssetAtPath<Texture2D>(PLACEHOLDER_GRAPHIC_PATH);
+
             Undo.undoRedoPerformed += OnUndoRedo;
             TFToolsAssPP.OnTexturesImported = null;
         }
@@ -198,6 +208,15 @@ namespace TF2Ls
 
         private void OnGUI()
         {
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Model Texturer", TF2LsStyles.CenteredTitle);
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Automatically texture models ripped from Valve games",
+                TF2LsStyles.CenteredLabel);
+
             scrollProgress = EditorGUILayout.BeginScrollView(new Vector2(scrollX, scrollY));
 
             if ((SerializedObject == null || ModelTexturerData == null) && Event.current.type == EventType.Repaint)
@@ -234,40 +253,41 @@ namespace TF2Ls
                     GUIUtility.ExitGUI();
                 }
 
-                GUIStyle titleStyle =
-                    new GUIStyle(EditorStyles.label)
-                    .ApplyTextAnchor(TextAnchor.UpperCenter)
-                    .ApplyBoldText()
-                    .SetFontSize(14);
-
                 // Target Models
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("== Target Models ==", titleStyle);
+                EditorGUILayout.LabelField("1. Assign Meshes", TF2LsStyles.CenteredBoldHeader);
                 EditorGUILayout.Space();
-                if (showHelpText.boolValue) EditorGUILayout.LabelField("Add a MeshRenderer/SkinnedMeshRenderer to apply textures to just that mesh", TF2LsSettings.Settings.HelpTextStyle);
+                if (showHelpText.boolValue) EditorGUILayout.LabelField("Add a MeshRenderer/SkinnedMeshRenderer to apply textures to just that mesh", TF2LsStyles.HelpTextStyle);
                 localRenderer = EditorGUILayout.ObjectField(new GUIContent("Model"), localRenderer, typeof(Renderer), true) as Renderer;
 
                 EditorGUILayout.LabelField("- or -", new GUIStyle(EditorStyles.label).ApplyTextAnchor(TextAnchor.UpperCenter));
-                if (showHelpText.boolValue) EditorGUILayout.LabelField("Add a GameObject to apply textures to all Renderers in that GameObject and it's children", TF2LsSettings.Settings.HelpTextStyle);
+                if (showHelpText.boolValue) EditorGUILayout.LabelField("Add a GameObject to apply textures to all Renderers in that GameObject and it's children", TF2LsStyles.HelpTextStyle);
 
                 localObject = EditorGUILayout.ObjectField(new GUIContent("Model Group"), localObject, typeof(GameObject), true) as GameObject;
                 EditorGUILayout.EndVertical();
 
                 // Model Texturer
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("== Model Texturer ==", titleStyle);
+                EditorGUILayout.LabelField("2. Set Up Reference Model", TF2LsStyles.CenteredBoldHeader);
                 EditorGUILayout.Space();
                 RenderHLExtractTools();
+                EditorGUILayout.EndVertical();
+
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                EditorGUILayout.LabelField("3. Export Paths", TF2LsStyles.CenteredBoldHeader);
+                EditorGUILayout.Space();
+                RenderExportPaths();
+                EditorGUILayout.EndVertical();
+
                 if (Event.current.type == EventType.Used)
                 {
                     SerializedObject.ApplyModifiedProperties();
                     GUIUtility.ExitGUI();
                 }
-                EditorGUILayout.EndVertical();
 
                 // VMT Overrides
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("== VMT Import Options ==", titleStyle);
+                EditorGUILayout.LabelField("VMT Import Options", TF2LsStyles.CenteredBoldHeader);
                 EditorGUILayout.Space();
                 RenderOverrideProperties();
 
@@ -275,7 +295,7 @@ namespace TF2Ls
 
                 // Settings
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("== Settings ==", titleStyle);
+                EditorGUILayout.LabelField("Settings", TF2LsStyles.CenteredBoldHeader);
                 EditorGUILayout.Space();
                 RenderSettings();
 
@@ -288,50 +308,62 @@ namespace TF2Ls
             EditorGUILayout.EndScrollView();
         }
 
-        public const string VMT_VPK_FILENAME = "tf2_misc_dir.vpk";
-        public const string VTF_VPK_FILENAME = "tf2_textures_dir.vpk";
-        List<string> vmtsToImport = new List<string>();
-
         void RenderHLExtractTools()
         {
             EditorGUILayout.PropertyField(modelType);
             if (modelType.enumValueIndex != (int)ModelTexturerData.ModelType.Map)
             {
-                if (modelType.enumValueIndex != (int)ModelTexturerData.ModelType.Weapon)
+                if (modelType.enumValueIndex != (int)ModelTexturerData.ModelType.Item)
                     EditorGUILayout.PropertyField(characterClass);
                 EditorGUILayout.PropertyField(team);
             }
 
-            if (modelType.enumValueIndex == 1 || modelType.enumValueIndex == 2)
+            if (modelType.enumValueIndex == 1)
             {
-                if (showHelpText.boolValue) EditorGUILayout.LabelField("Sorry, weapon and cosmetic importing is " +
-                    "currently not ready to use.", TF2LsSettings.Settings.HelpTextStyle);
-                if (GUILayout.Button("TEST"))
+                if (GUILayout.Button("Select Item", GUILayout.ExpandWidth(false)))
                 {
                     ItemViewer.InitUtility();
                 }
+
+                //if (showHelpText.boolValue) EditorGUILayout.LabelField("Sorry, weapon and cosmetic importing is " +
+                //    "currently not ready to use.", TF2LsStyles.HelpTextStyle);
+
+                var rect = EditorGUILayout.GetControlRect(true, 128);
+                var graphic = new GUIContent(ActiveItem == null ? PlaceHolderGraphic : ActiveItem.loadedImage);
+                GUI.Box(rect, new GUIContent(), EditorStyles.helpBox.ApplyTextAnchor(TextAnchor.LowerCenter));
+                var imageRect = new Rect(rect);
+                imageRect.x += rect.width / 2 - 64;
+                imageRect.y += rect.height / 2 - 64 + 10;
+                GUI.Box(imageRect, graphic, new GUIStyle());
+
+                rect.y += 5;
+                EditorGUI.LabelField(rect, ActiveItem == null ? "None" : ActiveItem.name, TF2LsStyles.CenteredBoldHeader);
+                
                 return;
             }
+        }
 
+        void RenderExportPaths()
+        {
             EditorGUILayout.PropertyField(searchTF2Install);
 
             if (showHelpText.boolValue) EditorGUILayout.LabelField("Choose folders for your model's " +
                 "materials and textures to go. You are recommended to make dedicated folders for " +
-                "characters/weapons/cosmetics and to share folders for maps.", TF2LsSettings.Settings.HelpTextStyle);
+                "characters/weapons/cosmetics and to share folders for maps.", TF2LsStyles.HelpTextStyle);
 
             EditorHelper.RenderSmartFolderProperty(new GUIContent("VMT Path"), vmtPath, true, "Specify the location for VMT files");
             EditorHelper.RenderSmartFolderProperty(new GUIContent("VTF Path"), vtfPath, true, "Specify the location for VTF files");
             EditorHelper.RenderSmartFolderProperty(new GUIContent("Texture Output"), textureOutputFolderPath, true, "Specify where to save converted textures");
 
             EditorHelper.RenderSmartFolderProperty(new GUIContent("Material Output"), generatedMaterialSavePath, true, "Specify where to save generated materials");
-            if (showHelpText.boolValue) EditorGUILayout.LabelField("Tip: If your model comes out strangely black, try adjusting the material offsets!", TF2LsSettings.Settings.HelpTextStyle);
+            if (showHelpText.boolValue) EditorGUILayout.LabelField("Tip: If your model comes out strangely black, try adjusting the material offsets!", TF2LsStyles.HelpTextStyle);
 
             bool cantRun = !AssetDatabase.IsValidFolder(vmtPath.stringValue) ||
                             !AssetDatabase.IsValidFolder(vtfPath.stringValue) ||
                             !AssetDatabase.IsValidFolder(textureOutputFolderPath.stringValue) ||
                             !AssetDatabase.IsValidFolder(generatedMaterialSavePath.stringValue);
 
-            if (cantRun) 
+            if (cantRun)
                 EditorGUILayout.HelpBox("One or more of the above folder paths are invalid!", MessageType.Error);
 
             using (new EditorGUI.DisabledScope(cantRun))
@@ -385,7 +417,7 @@ namespace TF2Ls
                         }
                     };
                     break;
-                case ModelTexturerData.ModelType.Weapon:
+                case ModelTexturerData.ModelType.Item:
                     vmtFolder = Path.Combine(vmtFolder, "models");
                     processMaterialPath = (sharedMat) =>
                     {
@@ -418,8 +450,6 @@ namespace TF2Ls
                         }
                     };
                     break;
-                case ModelTexturerData.ModelType.Cosmetic:
-                    break;
                 case ModelTexturerData.ModelType.Map:
                     processMaterialPath = (sharedMat) =>
                     {
@@ -435,31 +465,38 @@ namespace TF2Ls
                             vmtsToImport.Add(name);
                             var underScores = System.Array.FindAll(name.ToCharArray(), e => e == '_');
 
-                            string[] splits = name.Split('_');
-
-                            for (int c = 0; c < Mathf.Pow(2, underScores.Length); c++)
+                            if (underScores.Length > 0)
                             {
-                                string binary = System.Convert.ToString(c, 2);
-                                binary = new string('0', underScores.Length - binary.Length) + binary;
+                                string[] splits = name.Split('_');
 
-                                var charB = binary.ToCharArray();
-
-                                string newName = splits[0];
-
-                                for (int j = 0; j < binary.Length; j++)
+                                for (int c = 0; c < Mathf.Pow(2, underScores.Length) && underScores.Length > 0; c++)
                                 {
-                                    if (charB[j] == '0') // Underscore
-                                    {
-                                        newName += '_';
-                                    }
-                                    else // Slash
-                                    {
-                                        newName += '/';
-                                    }
-                                    newName += splits[j + 1];
-                                }
+                                    string binary = System.Convert.ToString(c, 2);
+                                    binary = new string('0', underScores.Length - binary.Length) + binary;
 
-                                materialPaths.Add(Path.Combine(vmtFolder, newName));
+                                    var charB = binary.ToCharArray();
+
+                                    string newName = splits[0];
+
+                                    for (int j = 0; j < binary.Length; j++)
+                                    {
+                                        if (charB[j] == '0') // Underscore
+                                        {
+                                            newName += '_';
+                                        }
+                                        else // Slash
+                                        {
+                                            newName += '/';
+                                        }
+                                        newName += splits[j + 1];
+                                    }
+
+                                    materialPaths.Add(Path.Combine(vmtFolder, newName));
+                                }
+                            }
+                            else
+                            {
+                                materialPaths.Add(Path.Combine(vmtFolder, name));
                             }
                         }
                     };
@@ -795,6 +832,7 @@ namespace TF2Ls
 
             // Import all existing Textures
             var textures = EditorHelper.ImportAssetsAtPath<Texture2D>(textureOutputFolderPath.stringValue);
+
             {
                 string vtfCmdPath = TF2LsSettings.Settings.VTFCmdPath;
                 int i = 0;
@@ -1096,13 +1134,13 @@ namespace TF2Ls
 
                     if (showHelpText.boolValue) EditorGUILayout.LabelField("When converting a VMT to Unity, the default material's " +
                         "shader will be replaced depending on the shader used in the VMT.",
-                        TF2LsSettings.Settings.HelpTextStyle);
+                        TF2LsStyles.HelpTextStyle);
                     EditorGUILayout.PropertyField(shaderOverrides);
 
                     if (showHelpText.boolValue) EditorGUILayout.LabelField("When converting a VMT to Unity, the VMT will be scanned for " +
                         "properties using the names in the left column to pass to your shader's " +
                         "properties matching the names in the middle column.",
-                        TF2LsSettings.Settings.HelpTextStyle);
+                        TF2LsStyles.HelpTextStyle);
                     EditorGUILayout.PropertyField(propertyOverrides);
                     EditorGUILayout.EndVertical();
                 }

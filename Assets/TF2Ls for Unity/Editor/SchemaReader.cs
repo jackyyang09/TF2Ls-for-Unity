@@ -25,7 +25,7 @@ namespace TF2Ls
         Texture2D placeholderGraphic;
 
         const int BUTTON_ROW_SIZE = 4;
-        //static float buttonSize => (Window.position.width - 15) / BUTTON_ROW_SIZE;
+        static float buttonSize => (Window.position.width - 12) / BUTTON_ROW_SIZE;
 
         class Button
         {
@@ -42,7 +42,7 @@ namespace TF2Ls
             window.SetWindowTitle();
             window.ShowUtility();
 
-            //window.maxSize = new Vector2(buttonSize * BUTTON_ROW_SIZE + 15, 1080);
+            window.maxSize = new Vector2(128 * BUTTON_ROW_SIZE, 1080);
         }
 
         protected override void SetWindowTitle()
@@ -60,11 +60,6 @@ namespace TF2Ls
                 //    );
                 //itemsGame = new VDFParser(File.ReadAllLines(SCHEMA_PATH));
                 //var prop = Gameloop.Vdf.VdfConvert.Deserialize(File.ReadAllText(SCHEMA_PATH));
-                //
-                //dynamic d = prop;
-                //Debug.Log(d.Value.game_info);
-                //Debug.Log(d.Value.game_info.first_valid_class);
-                //
                 EditorUtility.DisplayProgressBar(ObjectNames.GetClassName(this),
                     "Parsing tf_english.txt...",
                     0.5f
@@ -72,25 +67,7 @@ namespace TF2Ls
                 tfEnglish = new BasicVDFParser(File.ReadAllLines(EN_LOCALE_PATH));
                 EditorUtility.ClearProgressBar();
 
-                var path = Path.Combine(TF2LsSettings.ResourcesPath, "item_schema.txt");
-                payload = JsonUtility.FromJson<TF2APIResult>(File.ReadAllText(path));
-
-                itemNames = new List<string>();
-                ModelTexturerWindow.Items = new List<ItemData>();
-                var items = payload.result.items;
-                for (int i = 0; i < items.Length; i++)
-                {
-                    var item_name = items[i].item_name.Substring(1).ToLowerInvariant();
-                    if (!tfEnglish.rootNode.children[1].childrenDictionary.ContainsKey(item_name)) continue;
-                    if (itemNames.Contains(item_name)) continue;
-                    itemNames.Add(item_name);
-                    items[i].name = tfEnglish.rootNode.children[1].childrenDictionary[item_name].property;
-                    ModelTexturerWindow.Items.Add(items[i]);
-                }
-
-                placeholderGraphic = new Texture2D(128, 128);
-
-                EditorUtility.ClearProgressBar();
+                RetrieveOnlineItems();
                 //RetrieveItems();
             }
             filteredItems = new List<ItemData>(ModelTexturerWindow.Items);
@@ -98,27 +75,35 @@ namespace TF2Ls
 
         private void OnGUI()
         {
+            EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginChangeCheck();
-            searchFilter = EditorGUILayout.TextField("Search", searchFilter);
-            if (EditorGUI.EndChangeCheck())
+            searchFilter = EditorGUILayout.TextField(GUIContent.none, searchFilter);
+            if (GUILayout.Button("Search"))
             {
                 ApplySearchFilter();
             }
+            EditorGUILayout.EndHorizontal();
 
-            scroll = EditorGUILayout.BeginScrollView(new Vector2(0, scroll), false, false).y;
-
-            var items = ModelTexturerWindow.Items;
+            scroll = EditorGUILayout.BeginScrollView(new Vector2(0, scroll)).y;
 
             var style = GUI.skin.button.ApplyTextAnchor(TextAnchor.LowerCenter);
             style.imagePosition = ImagePosition.ImageAbove;
-            style.fixedHeight = 128;
-            style.fixedWidth = 128;
 
             int row = 0;
 
             buttons = new List<Button>();
 
-            for (int i = 0; i < items.Count; i++, row = (row + 1) % 4)
+            //for (int i = 0; i < filteredItems.Count; i++)
+            //{
+            //    //if (!filteredItems[i].used_by_classes.Contains("spy")) continue;
+            //    if (GUILayout.Button(filteredItems[i].name))
+            //    {
+            //        Application.OpenURL("https://wiki.teamfortress.com/wiki/" + filteredItems[i].name);
+            //    }
+            //}
+
+            var items = filteredItems;
+            for (int i = 0; i < items.Count; i++, row = (row + 1) % BUTTON_ROW_SIZE)
             {
                 if (row == 0) EditorGUILayout.BeginHorizontal();
 
@@ -128,11 +113,16 @@ namespace TF2Ls
                 GUIContent content = new GUIContent(shortName, graphic, items[i].name);
 
                 EditorGUILayout.BeginVertical();
-                Rect rect = EditorGUILayout.GetControlRect(false, 128, style);
-                rect.x = row * 128;
+                Rect rect = EditorGUILayout.GetControlRect(false, buttonSize, style);
+                rect.width = buttonSize;
+                rect.x = row * buttonSize;
+
                 if (GUI.Button(rect, content, style))
                 {
-
+                    ModelTexturerWindow.ActiveItem = items[i];
+                    window.Close();
+                    ModelTexturerWindow.Window.Repaint();
+                    GUIUtility.ExitGUI();
                 }
 
                 var b = new Button();
@@ -143,7 +133,7 @@ namespace TF2Ls
 
                 EditorGUILayout.EndVertical();
 
-                if (row == 3) EditorGUILayout.EndHorizontal();
+                if (row == BUTTON_ROW_SIZE - 1) EditorGUILayout.EndHorizontal();
             }
 
             if (Event.current.type == EventType.Repaint)
@@ -154,17 +144,14 @@ namespace TF2Ls
                     if (visible && buttons[i].ItemData.loadedImage == null)
                     {
                         if (string.IsNullOrEmpty(buttons[i].ItemData.image_url)) continue;
-                        buttons[i].ItemData.loadedImage = LoadImageFromURL(buttons[i].ItemData.image_url);
+                        EditorUtility.DisplayProgressBar(ObjectNames.GetClassName(this),
+                            "Loading preview graphic for " + buttons[i].ItemData.name + "...",
+                            0.5f
+                            );
+                        //buttons[i].ItemData.loadedImage = LoadImageFromURL(buttons[i].ItemData.image_url);
+                        buttons[i].ItemData.loadedImage = ModelTexturerWindow.PlaceHolderGraphic;
+                        EditorUtility.ClearProgressBar();
                     }
-                }
-            }
-
-            for (int i = 0; i < filteredItems.Count; i++)
-            {
-                //if (!filteredItems[i].used_by_classes.Contains("spy")) continue;
-                if (GUILayout.Button(filteredItems[i].name))
-                {
-                    Application.OpenURL("https://wiki.teamfortress.com/wiki/" + filteredItems[i].name);
                 }
             }
 
@@ -202,6 +189,29 @@ namespace TF2Ls
                 ImageConversion.LoadImage(tex, dataArr);
             }
             return tex;
+        }
+
+        void RetrieveOnlineItems()
+        {
+            var path = Path.Combine(TF2LsSettings.ResourcesPath, "item_schema.txt");
+            payload = JsonUtility.FromJson<TF2APIResult>(File.ReadAllText(path));
+
+            itemNames = new List<string>();
+            ModelTexturerWindow.Items = new List<ItemData>();
+            var items = payload.result.items;
+            for (int i = 0; i < items.Length; i++)
+            {
+                var item_name = items[i].item_name.Substring(1).ToLowerInvariant();
+                if (!tfEnglish.rootNode.children[1].childrenDictionary.ContainsKey(item_name)) continue;
+                if (itemNames.Contains(item_name)) continue;
+                itemNames.Add(item_name);
+                items[i].name = tfEnglish.rootNode.children[1].childrenDictionary[item_name].property;
+                ModelTexturerWindow.Items.Add(items[i]);
+            }
+
+            placeholderGraphic = new Texture2D(128, 128);
+
+            EditorUtility.ClearProgressBar();
         }
 
         void RetrieveItems()

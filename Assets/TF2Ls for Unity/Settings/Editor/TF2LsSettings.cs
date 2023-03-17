@@ -40,7 +40,7 @@ namespace TF2Ls
 
         [Tooltip("Font size of helper text")]
         [SerializeField] int helpTextSize = 10;
-        public GUIStyle HelpTextStyle { get { return new GUIStyle(EditorStyles.helpBox).SetFontSize(helpTextSize); } }
+        public int HelpTextSize => helpTextSize;
 
         [SerializeField] string tfPath;
         public string TFInstallPath => tfPath;
@@ -180,7 +180,7 @@ namespace TF2Ls
             if (unlockSystemObjects.boolValue)
             {
                 EditorGUILayout.LabelField("Don't touch these files if you don't know what they do. " +
-                    "Worst case scenario, you will have to re-import the package.", TF2LsSettings.Settings.HelpTextStyle.ApplyBoldText());
+                    "Worst case scenario, you will have to re-import the package.", TF2LsStyles.HelpTextStyle.ApplyBoldText());
             }
 
             EditorGUILayout.BeginHorizontal();
@@ -211,7 +211,7 @@ namespace TF2Ls
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.LabelField("This is an example of Help Text. " +
                 "Mouse over open windows to see font changes reflected.",
-                TF2LsSettings.Settings.HelpTextStyle);
+                TF2LsStyles.HelpTextStyle);
 
             if (GUILayout.Button("Reset to Default", new GUILayoutOption[] { GUILayout.ExpandWidth(false) }))
             {

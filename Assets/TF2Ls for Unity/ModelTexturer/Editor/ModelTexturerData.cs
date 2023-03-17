@@ -7,8 +7,7 @@ namespace TF2Ls
         public enum ModelType
         {
             Character,
-            Weapon,
-            Cosmetic,
+            Item,
             Map
         }
 

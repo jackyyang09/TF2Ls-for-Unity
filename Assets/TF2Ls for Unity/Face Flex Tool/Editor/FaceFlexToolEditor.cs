@@ -82,7 +82,18 @@ namespace TF2Ls.FaceFlex
         FaceFlexTool script => target as FaceFlexTool;
         SkinnedMeshRenderer rendererObj => renderer.objectReferenceValue as SkinnedMeshRenderer;
 
-        AnimationWindow animWindow => EditorWindow.GetWindow<AnimationWindow>();
+        AnimationWindow animWindow;
+        AnimationWindow AnimWindow
+        {
+            get
+            {
+                if (animWindow == null)
+                {
+                    animWindow = EditorWindow.GetWindow<AnimationWindow>();
+                }
+                return animWindow;
+            }
+        }
         GameObject gameObject => script.gameObject;
 
         static string PresetPath => Path.Combine(TF2LsSettings.Settings.PackagePath, "Face Flex Tool", "Presets");
@@ -194,13 +205,13 @@ namespace TF2Ls.FaceFlex
                     }
 
                     ApplyAnimationChanges();
-                    animTime = animWindow.time;
+                    animTime = AnimWindow.time;
                 }
 
-                if (animTime != animWindow.time)
+                if (animTime != AnimWindow.time)
                 {
                     ApplyAnimationChanges();
-                    animTime = animWindow.time;
+                    animTime = AnimWindow.time;
                 }
             }
             else
@@ -224,15 +235,15 @@ namespace TF2Ls.FaceFlex
         {
             if (!script.MeshBlendshapesConverted) return;
 
-            var bindings = AnimationUtility.GetCurveBindings(animWindow.animationClip);
+            var bindings = AnimationUtility.GetCurveBindings(AnimWindow.animationClip);
             var keys = flexControllerProps.GetKeysCached();
             for (int i = 0; i < bindings.Length; i++)
             {
                 if (bindings[i].path != gameObject.name || !bindings[i].propertyName.Contains("value")) continue;
-                var curve = AnimationUtility.GetEditorCurve(animWindow.animationClip, bindings[i]);
+                var curve = AnimationUtility.GetEditorCurve(AnimWindow.animationClip, bindings[i]);
                 var index = System.Convert.ToInt16(bindings[i].propertyName.Remove(0, "value".Length));
                 var prop = flexControllerProps[keys[index]];
-                prop.Value.floatValue = curve.Evaluate(animWindow.time);
+                prop.Value.floatValue = curve.Evaluate(AnimWindow.time);
             }
 
             script.UpdateBlendShapes();
@@ -300,19 +311,14 @@ namespace TF2Ls.FaceFlex
             serializedObject.ApplyModifiedProperties();
         }
 
-        GUIStyle titleStyle => EditorStyles.boldLabel
-                .ApplyBoldText()
-                .ApplyTextAnchor(TextAnchor.MiddleCenter)
-                .SetFontSize(20);
-
         void RenderSetupGUI()
         {
-            EditorGUILayout.LabelField("Setup", titleStyle);
+            EditorGUILayout.LabelField("Setup", TF2LsStyles.CenteredTitle);
 
             EditorGUILayout.Space();
 
-            EditorGUILayout.LabelField("Convert Blend Shapes to Valve's Flex system",
-                EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
+            EditorGUILayout.LabelField("Convert Blend Shapes to Valve's Flex system", 
+                TF2LsStyles.CenteredLabel);
 
             RenderWarnings();
             RenderModelImporterWarnings();
@@ -321,16 +327,15 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-            EditorGUILayout.LabelField("Setup Status", EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter));
+            EditorGUILayout.LabelField("Setup Status", TF2LsStyles.UpCenteredHeader);
 
-            var style = EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.MiddleCenter);
             if (renderer.objectReferenceValue && qcFileObject != null && normalizedBoundsSize.vector3Value != Vector3.zero)
             {
-                EditorGUILayout.LabelField("Finished!", style.SetTextColor(TF2Colors.BUFF));
+                EditorGUILayout.LabelField("Finished!", TF2LsStyles.CenteredHeader.SetTextColor(TF2Colors.BUFF));
             }
             else
             {
-                EditorGUILayout.LabelField("Unfinished", style.SetTextColor(TF2Colors.DEBUFF));
+                EditorGUILayout.LabelField("Unfinished", TF2LsStyles.CenteredHeader.SetTextColor(TF2Colors.DEBUFF));
             }
 
             EditorGUILayout.EndVertical();
@@ -344,8 +349,8 @@ namespace TF2Ls.FaceFlex
             using (new EditorGUI.DisabledGroupScope(previewingMesh.boolValue))
             {
                 EditorGUILayout.LabelField(ObjectNames.GetClassName(script) + " needs a reference to your " +
-                "model's SkinnedMeshRenderer component in order to change mesh data and allow Face Flex manipulation.",
-                TF2LsSettings.Settings.HelpTextStyle);
+                    "model's SkinnedMeshRenderer component in order to change mesh data and allow Face Flex manipulation.",
+                    TF2LsStyles.HelpTextStyle);
 
                 EditorGUILayout.PropertyField(renderer);
 
@@ -353,7 +358,7 @@ namespace TF2Ls.FaceFlex
 
                 EditorGUILayout.LabelField("To properly convert your mesh's Blendshapes into flexes, " +
                     "add your mesh's .qc file to your project and get a reference to it in the field below.",
-                    TF2LsSettings.Settings.HelpTextStyle);
+                    TF2LsStyles.HelpTextStyle);
 
                 EditorGUI.BeginChangeCheck();
                 EditorHelper.RenderSmartFileProperty(new GUIContent(".QC File"), qcPath, "qc", true, "Choose your model's .qc file");
@@ -378,12 +383,12 @@ namespace TF2Ls.FaceFlex
 
         void RenderFaceposerGUI()
         {
-            EditorGUILayout.LabelField("Faceposer", titleStyle);
+            EditorGUILayout.LabelField("Faceposer", TF2LsStyles.CenteredTitle);
 
             EditorGUILayout.Space();
 
             EditorGUILayout.LabelField("Alter the expressions of Source-engine models",
-                EditorStyles.label.ApplyTextAnchor(TextAnchor.MiddleCenter));
+                TF2LsStyles.CenteredLabel);
 
             RenderWarnings();
             RenderModelImporterWarnings();
@@ -392,12 +397,11 @@ namespace TF2Ls.FaceFlex
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-            EditorGUILayout.LabelField("Flex Preview Status", EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter));
+            EditorGUILayout.LabelField("Flex Preview Status", TF2LsStyles.UpCenteredHeader);
 
-            var style = EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.MiddleCenter);
             if (previewingMesh.boolValue)
             {
-                EditorGUILayout.LabelField("Previewing", style.SetTextColor(TF2Colors.BUFF));
+                EditorGUILayout.LabelField("Previewing", TF2LsStyles.CenteredHeader.SetTextColor(TF2Colors.BUFF));
 
                 EditorGUILayout.LabelField("Do NOT touch the SkinnedMeshRenderer component attached to\n" +
                     "<b>" + renderer.objectReferenceValue.name + "</b>\n" +
@@ -409,7 +413,7 @@ namespace TF2Ls.FaceFlex
             }
             else
             {
-                EditorGUILayout.LabelField("Not Previewing", style.SetTextColor(TF2Colors.DEBUFF));
+                EditorGUILayout.LabelField("Not Previewing", TF2LsStyles.CenteredHeader.SetTextColor(TF2Colors.DEBUFF));
             }
 
             EditorGUI.BeginDisabledGroup(qcFileObject == null);
@@ -471,7 +475,7 @@ namespace TF2Ls.FaceFlex
             EditorGUILayout.LabelField(
                 "Higher values distort the face in horrible ways. Keep between 1 and 2 for " +
                 "best results. Leave it at 1 if you're not sure!",
-                TF2LsSettings.Settings.HelpTextStyle);
+                TF2LsStyles.HelpTextStyle);
 
             EditorGUILayout.Space();
 

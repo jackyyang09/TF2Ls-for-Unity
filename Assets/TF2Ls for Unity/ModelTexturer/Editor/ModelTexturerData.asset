@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbe8f79f0f3d9284382ad1adb6062bf9, type: 3}
   m_Name: ModelTexturerData
   m_EditorClassIdentifier: 
-  modelType: 2
+  modelType: 0
   characterClass: 8
-  team: 1
+  team: 0
   searchTF2Install: 1
-  vmtPath: Assets/Test Assets/One Folder
-  vtfPath: Assets/Test Assets/One Folder
-  textureOutputFolderPath: Assets/Test Assets/One Folder
-  generatedMaterialSavePath: Assets/Test Assets/One Folder
+  vmtPath: Assets/Test Assets/Thememap
+  vtfPath: Assets/Test Assets/Thememap
+  textureOutputFolderPath: Assets/Test Assets/Thememap
+  generatedMaterialSavePath: Assets/Test Assets/Thememap
   overrideAsset: {fileID: 11400000, guid: c0cebf76d8b063c4380b60bdb11313e6, type: 2}
   showHelpText: 1
