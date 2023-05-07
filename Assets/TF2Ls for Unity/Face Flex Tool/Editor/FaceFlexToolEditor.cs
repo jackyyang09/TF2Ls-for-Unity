@@ -96,7 +96,7 @@ namespace TF2Ls.FaceFlex
         }
         GameObject gameObject => script.gameObject;
 
-        static string PresetPath => Path.Combine(TF2LsSettings.Settings.PackagePath, "Face Flex Tool", "Presets");
+        static string PresetPath => Path.Combine(TF2LsEditorSettings.Settings.PackagePath, "Face Flex Tool", "Presets");
 
         private void OnEnable()
         {
@@ -185,7 +185,7 @@ namespace TF2Ls.FaceFlex
                 {
                     if (!previewingMesh.boolValue && qcFileObject != null)
                     {
-                        if (TF2LsSettings.Settings.EnableFlexesWhenAnimating)
+                        if (TF2LsRuntimeSettings.Settings.EnableFlexesWhenAnimating)
                         {
                             if (EditorUtility.DisplayDialog("Entered Animation Mode", "You just " +
                                 "entered Animation mode, do you want to enable Face Flex previews?",

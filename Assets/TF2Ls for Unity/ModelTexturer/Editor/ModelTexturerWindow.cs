@@ -112,8 +112,8 @@ namespace TF2Ls
         public static List<ItemData> Items = new List<ItemData>();
         public static ItemData ActiveItem;
         public static Dictionary<string, string> EnglishDictionary = new Dictionary<string, string>();
-        static string PLACEHOLDER_GRAPHIC_PATH => 
-            Path.Combine(TF2LsSettings.Settings.PackagePath, "ModelTexturer", "outback-hat.png");
+        static string PLACEHOLDER_GRAPHIC_PATH =>
+            Path.Combine(TF2LsEditorSettings.Settings.PackagePath, "ModelTexturer", "outback-hat.png");
         public static Texture2D PlaceHolderGraphic;
 
         public const string VMT_VPK_FILENAME = "tf2_misc_dir.vpk";
@@ -133,7 +133,7 @@ namespace TF2Ls
             return false;
         }
 
-        [MenuItem(AboutEditor.MENU_DIRECTORY + "Model Texturer", false, 1)]
+        [MenuItem(TF2LsConstants.Paths.MODEL_TEXTURER, false, 1)]
         public static void Init()
         {
             // Get existing open window or if none, make a new one:
@@ -156,6 +156,17 @@ namespace TF2Ls
 
             Undo.undoRedoPerformed += OnUndoRedo;
             TFToolsAssPP.OnTexturesImported = null;
+
+            if (!TF2LsEditorSettings.Settings.TFInstallExists)
+            {
+                if (EditorUtility.DisplayDialog("Missing TF2 Install!", "Please set your TF2 install " +
+                    "location before using this tool!", "OK", "No, later"))
+                {
+                    TF2LsSettingsProvider.Init();
+                }
+                //Window.Close();
+                //GUIUtility.ExitGUI();
+            }
         }
 
         private void OnUndoRedo() => GetWindow<ModelTexturerWindow>().Repaint();
@@ -242,17 +253,6 @@ namespace TF2Ls
             {
                 SerializedObject.UpdateIfRequiredOrScript();
 
-                if (!TF2LsSettings.Settings.TFInstallExists)
-                {
-                    if (EditorUtility.DisplayDialog("Missing TF2 Install!", "Please set your TF2 install " +
-                        "location before using this tool!", "OK", "No, later"))
-                    {
-                        TF2LsSettings.Init();
-                    }
-                    Window.Close();
-                    GUIUtility.ExitGUI();
-                }
-
                 // Target Models
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorGUILayout.LabelField("1. Assign Meshes", TF2LsStyles.CenteredBoldHeader);
@@ -338,7 +338,7 @@ namespace TF2Ls
 
                 rect.y += 5;
                 EditorGUI.LabelField(rect, ActiveItem == null ? "None" : ActiveItem.name, TF2LsStyles.CenteredBoldHeader);
-                
+
                 return;
             }
         }
@@ -518,9 +518,9 @@ namespace TF2Ls
                 }
             }
 
-            string hlExtractPath = TF2LsSettings.Settings.HLExtractPath;
+            string hlExtractPath = TF2LsEditorSettings.Settings.HLExtractPath;
 
-            string packagePath = Path.Combine(TF2LsSettings.Settings.TFInstallPath, VMT_VPK_FILENAME);
+            string packagePath = Path.Combine(TF2LsEditorSettings.Settings.TFInstallPath, VMT_VPK_FILENAME);
 
             string vmtExportPathCombined = Path.Combine(CurrentDirectory, vmtPath.stringValue);
 
@@ -699,8 +699,8 @@ namespace TF2Ls
         {
             LoadVMTs();
 
-            string hlExtractPath = TF2LsSettings.Settings.HLExtractPath;
-            string packagePath = Path.Combine(TF2LsSettings.Settings.TFInstallPath, VTF_VPK_FILENAME);
+            string hlExtractPath = TF2LsEditorSettings.Settings.HLExtractPath;
+            string packagePath = Path.Combine(TF2LsEditorSettings.Settings.TFInstallPath, VTF_VPK_FILENAME);
             string vtfFullPath = Path.Combine(CurrentDirectory, vtfPath.stringValue);
 
             int k = 0;
@@ -834,7 +834,7 @@ namespace TF2Ls
             var textures = EditorHelper.ImportAssetsAtPath<Texture2D>(textureOutputFolderPath.stringValue);
 
             {
-                string vtfCmdPath = TF2LsSettings.Settings.VTFCmdPath;
+                string vtfCmdPath = TF2LsEditorSettings.Settings.VTFCmdPath;
                 int i = 0;
                 while (i < vtfs.Count)
                 {

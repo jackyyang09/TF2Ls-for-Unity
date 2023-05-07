@@ -28,6 +28,6 @@ namespace TF2Ls
             EditorStyles.largeLabel.ApplyTextAnchor(TextAnchor.UpperCenter);
 
         public static GUIStyle HelpTextStyle => 
-            new GUIStyle(EditorStyles.helpBox).SetFontSize(TF2LsSettings.Settings.HelpTextSize);
+            new GUIStyle(EditorStyles.helpBox).SetFontSize(TF2LsEditorSettings.Settings.HelpTextSize);
     }
 }

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbe8f79f0f3d9284382ad1adb6062bf9, type: 3}
   m_Name: ModelTexturerData
   m_EditorClassIdentifier: 
-  modelType: 0
+  modelType: 1
   characterClass: 8
   team: 0
   searchTF2Install: 1

@@ -9,8 +9,8 @@ namespace TF2Ls
 {
     public class ItemViewer : BaseTFToolsEditor<ItemViewer>
     {
-        string SCHEMA_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" });
-        string EN_LOCALE_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "resource", "tf_english.txt" });
+        string SCHEMA_PATH => Path.Combine(new string[] { TF2LsEditorSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" });
+        string EN_LOCALE_PATH => Path.Combine(new string[] { TF2LsEditorSettings.Settings.TFInstallPath, "resource", "tf_english.txt" });
 
         static BasicVDFParser itemsGame;
         static BasicVDFParser tfEnglish;
@@ -64,7 +64,10 @@ namespace TF2Ls
                     "Parsing tf_english.txt...",
                     0.5f
                     );
-                tfEnglish = new BasicVDFParser(File.ReadAllLines(EN_LOCALE_PATH));
+                if (File.Exists(EN_LOCALE_PATH))
+                {
+                    tfEnglish = new BasicVDFParser(File.ReadAllLines(EN_LOCALE_PATH));
+                }
                 EditorUtility.ClearProgressBar();
 
                 RetrieveOnlineItems();
@@ -193,7 +196,7 @@ namespace TF2Ls
 
         void RetrieveOnlineItems()
         {
-            var path = Path.Combine(TF2LsSettings.ResourcesPath, "item_schema.txt");
+            var path = Path.Combine(TF2LsEditorSettings.ResourcesPath, "item_schema.txt");
             payload = JsonUtility.FromJson<TF2APIResult>(File.ReadAllText(path));
 
             itemNames = new List<string>();
@@ -335,8 +338,8 @@ namespace TF2Ls
             set { scrollX = value.x; scrollY = value.y; }
         }
 
-        string SCHEMA_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" });
-        string EN_LOCALE_PATH => Path.Combine(new string[] { TF2LsSettings.Settings.TFInstallPath, "resource", "tf_english.txt" });
+        string SCHEMA_PATH => Path.Combine(new string[] { TF2LsEditorSettings.Settings.TFInstallPath, "scripts", "items", "items_game.txt" });
+        string EN_LOCALE_PATH => Path.Combine(new string[] { TF2LsEditorSettings.Settings.TFInstallPath, "resource", "tf_english.txt" });
 
         static List<ItemData> items = new List<ItemData>();
 
@@ -345,7 +348,7 @@ namespace TF2Ls
 
         static bool schemaLoaded => itemsGame != null;
 
-        [MenuItem(AboutEditor.MENU_DIRECTORY + "Schema Test", false, 1)]
+        [MenuItem(TF2LsConstants.Paths.MENU_BASE + "Schema Test", false, 1)]
         public static void Init()
         {
             // Get existing open window or if none, make a new one:

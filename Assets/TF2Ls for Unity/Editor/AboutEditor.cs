@@ -7,14 +7,10 @@ namespace TF2Ls
 {
     public class AboutEditor : Editor
     {
-        public const string PACKAGE_NAME = "TF2Ls for Unity";
-        public const string VERSION = "Version 0.0.3";
-        public const string MENU_DIRECTORY = "Tools/" + PACKAGE_NAME + "/";
-
-        [MenuItem(MENU_DIRECTORY + "About " + PACKAGE_NAME, false, priority = 999)]
+        [MenuItem(TF2LsConstants.Paths.ABOUT, false, priority = 999)]
         public static void About()
         {
-            if (EditorUtility.DisplayDialog(PACKAGE_NAME + " (" + VERSION + ")",
+            if (EditorUtility.DisplayDialog(TF2LsConstants.PACKAGE_NAME + " (Version " + TF2LsConstants.VERSION + ")",
                 "Thanks for the support!" +
                 System.Environment.NewLine + "Check me out on Twitter for more TF2 Unity stuff", "Check out Twitter", "Close"))
             {
