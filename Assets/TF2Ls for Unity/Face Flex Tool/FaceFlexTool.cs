@@ -264,7 +264,7 @@ namespace TF2Ls.FaceFlex
             for (int i = 0; i < blendshapeNames.Count; i++)
             {
 #if UNITY_EDITOR
-                if (Application.isPlaying)
+                if (!Application.isPlaying)
                 {
                     EditorUtility.DisplayProgressBar("Face Flex Tool",
                     "Generating BlendShape " + blendshapeNames[i], (float)i / (float)blendshapeNames.Count);

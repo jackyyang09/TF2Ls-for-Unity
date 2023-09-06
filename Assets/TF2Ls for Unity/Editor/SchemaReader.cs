@@ -2,8 +2,11 @@ using UnityEngine;
 using UnityEditor;
 using Ibasa.Valve.Vmt;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using JackysEditorHelpers;
+using Andeart.EditorCoroutines.Unity;
+using Andeart.EditorCoroutines.Unity.Coroutines;
 
 namespace TF2Ls
 {
@@ -22,19 +25,41 @@ namespace TF2Ls
         static List<ItemData> filteredItems;
         static List<string> itemNames;
         static TF2APIResult payload;
-        Texture2D placeholderGraphic;
+        Texture2D placeholderGraphic => ModelTexturerWindow.PlaceHolderGraphic;
 
         const int BUTTON_ROW_SIZE = 4;
         static float buttonSize => (Window.position.width - 12) / BUTTON_ROW_SIZE;
 
         class Button
         {
+            public enum ImageLoadState
+            {
+                Unloaded,
+                Loading,
+                Loaded
+            }
+
             public ItemData ItemData;
             public Rect Rect;
             public bool Visible;
+            public ImageLoadState LoadState;
+
+            public void OnDownloadDataCompleted(object sender, System.Net.DownloadDataCompletedEventArgs e)
+            {
+                if (!e.Cancelled && e.Error == null)
+                {
+                    byte[] data = (byte[])e.Result;
+
+                    Texture2D tex = new Texture2D(128, 128);
+                    ImageConversion.LoadImage(tex, data);
+                    ItemData.loadedImage = tex;
+                    LoadState = ImageLoadState.Loaded;
+                    ItemViewer.Window.Repaint();
+                }
+            }
         }
 
-        static List<Button> buttons;
+        static List<Button> buttons = new List<Button>();
 
         public static void InitUtility()
         {
@@ -74,6 +99,13 @@ namespace TF2Ls
                 //RetrieveItems();
             }
             filteredItems = new List<ItemData>(ModelTexturerWindow.Items);
+
+            for (int i = 0; i < filteredItems.Count; i++)
+            {
+                var b = new Button();
+                b.ItemData = filteredItems[i];
+                buttons.Add(b);
+            }
         }
 
         private void OnGUI()
@@ -93,8 +125,6 @@ namespace TF2Ls
             style.imagePosition = ImagePosition.ImageAbove;
 
             int row = 0;
-
-            buttons = new List<Button>();
 
             //for (int i = 0; i < filteredItems.Count; i++)
             //{
@@ -119,6 +149,7 @@ namespace TF2Ls
                 Rect rect = EditorGUILayout.GetControlRect(false, buttonSize, style);
                 rect.width = buttonSize;
                 rect.x = row * buttonSize;
+                buttons[i].Rect = rect;
 
                 if (GUI.Button(rect, content, style))
                 {
@@ -128,12 +159,6 @@ namespace TF2Ls
                     GUIUtility.ExitGUI();
                 }
 
-                var b = new Button();
-                rect.position += position.position - new Vector2(0, scroll);
-                b.ItemData = items[i];
-                b.Rect = rect;
-                buttons.Add(b);
-
                 EditorGUILayout.EndVertical();
 
                 if (row == BUTTON_ROW_SIZE - 1) EditorGUILayout.EndHorizontal();
@@ -141,19 +166,20 @@ namespace TF2Ls
 
             if (Event.current.type == EventType.Repaint)
             {
+                float windowMax = position.height - 11;
+
                 for (int i = 0; i < buttons.Count; i++)
                 {
-                    bool visible = position.Contains(buttons[i].Rect.min) || position.Contains(buttons[i].Rect.max);
-                    if (visible && buttons[i].ItemData.loadedImage == null)
+                    float adjustedYMin = buttons[i].Rect.yMin - (scroll - 11);
+                    float adjustedYMax = buttons[i].Rect.yMax - (scroll - 11);
+
+                    bool visible = (adjustedYMin > 0 && adjustedYMin < windowMax) ||
+                        (adjustedYMax > 0 && adjustedYMax < windowMax);
+                    if (visible && buttons[i].LoadState == Button.ImageLoadState.Unloaded)
                     {
                         if (string.IsNullOrEmpty(buttons[i].ItemData.image_url)) continue;
-                        EditorUtility.DisplayProgressBar(ObjectNames.GetClassName(this),
-                            "Loading preview graphic for " + buttons[i].ItemData.name + "...",
-                            0.5f
-                            );
-                        //buttons[i].ItemData.loadedImage = LoadImageFromURL(buttons[i].ItemData.image_url);
-                        buttons[i].ItemData.loadedImage = ModelTexturerWindow.PlaceHolderGraphic;
-                        EditorUtility.ClearProgressBar();
+                        LoadButtonImage(buttons[i]);
+                        buttons[i].LoadState = Button.ImageLoadState.Loading;
                     }
                 }
             }
@@ -181,17 +207,13 @@ namespace TF2Ls
             }
         }
 
-        Texture2D LoadImageFromURL(string url)
+        void LoadButtonImage(Button button)
         {
-            Texture2D tex;
             using (var webClient = new System.Net.WebClient())
             {
-                byte[] dataArr = webClient.DownloadData(url);
-
-                tex = new Texture2D(128, 128);
-                ImageConversion.LoadImage(tex, dataArr);
+                webClient.DownloadDataCompleted += button.OnDownloadDataCompleted;
+                webClient.DownloadDataAsync(new System.Uri(button.ItemData.image_url));
             }
-            return tex;
         }
 
         void RetrieveOnlineItems()
@@ -211,8 +233,6 @@ namespace TF2Ls
                 items[i].name = tfEnglish.rootNode.children[1].childrenDictionary[item_name].property;
                 ModelTexturerWindow.Items.Add(items[i]);
             }
-
-            placeholderGraphic = new Texture2D(128, 128);
 
             EditorUtility.ClearProgressBar();
         }
